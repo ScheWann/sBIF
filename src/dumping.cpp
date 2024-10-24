@@ -39,7 +39,7 @@ void dumpSingleChain(my_chain& chain, const char* out_folder, unsigned rep_id, c
 }
 
 // insert into the database
-void insertSampleData(PGconn* conn, my_chain& chain, unsigned rep_id, const char* job_prefix)
+void insertSampleData(PGconn* conn, my_chain& chain, unsigned start, unsigned end, unsigned rep_id, const char* job_prefix)
 {
     if (conn == NULL)
     {
@@ -47,11 +47,11 @@ void insertSampleData(PGconn* conn, my_chain& chain, unsigned rep_id, const char
         return;
     }
 
-    const char* insertQuery = "INSERT INTO position (sampleID, chrID, X, Y, Z) VALUES ($1, $2, $3, $4, $5);";
+    const char* insertQuery = "INSERT INTO position (sampleID, chrID, X, Y, Z, start_value, end_value) VALUES ($1, $2, $3, $4, $5, $6, $7);";
 
     for (Node node : chain)
     {
-        const char* params[5];
+        const char* params[7];
 
         char rep_id_str[12];
         snprintf(rep_id_str, sizeof(rep_id_str), "%u", rep_id);
@@ -67,7 +67,14 @@ void insertSampleData(PGconn* conn, my_chain& chain, unsigned rep_id, const char
         params[3] = y_str;
         params[4] = z_str;
 
-        PGresult* res = PQexecParams(conn, insertQuery, 5, NULL, params, NULL, NULL, 0);
+        char start_str[12], end_str[12];
+        snprintf(start_str, sizeof(start_str), "%u", start);
+        snprintf(end_str, sizeof(end_str), "%u", end);
+        
+        params[5] = start_str;
+        params[6] = end_str;
+
+        PGresult* res = PQexecParams(conn, insertQuery, 7, NULL, params, NULL, NULL, 0);
         if (PQresultStatus(res) != PGRES_COMMAND_OK)
         {
             fprintf(stderr, "Insert failed: %s\n", PQerrorMessage(conn));
