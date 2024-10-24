@@ -1,5 +1,6 @@
 #include "dumping.h"
 #include <libpq-fe.h>
+#include <sstream>
 
 char* getOutfile(const char* out_folder, unsigned rep_id, const char* job_prefix)
 {
@@ -39,57 +40,72 @@ void dumpSingleChain(my_chain& chain, const char* out_folder, unsigned rep_id, c
 }
 
 // insert into the database
-void insertSampleData(PGconn* conn, my_chain& chain, unsigned start, unsigned end, unsigned rep_id, const char* job_prefix)
-{
-    if (conn == NULL)
-    {
+std::string join(const std::vector<std::string>& elements, const std::string& delimiter) {
+    std::ostringstream oss;
+    for (size_t i = 0; i < elements.size(); ++i) {
+        oss << elements[i];
+        if (i < elements.size() - 1) {
+            oss << delimiter;
+        }
+    }
+    return oss.str();
+}
+
+void insertSampleData(PGconn* conn, my_chain& chain, unsigned start, unsigned end, unsigned rep_id, const char* job_prefix) {
+    if (conn == NULL) {
         std::cerr << "Connection to database failed!" << std::endl;
         return;
     }
 
-    const char* insertQuery = "INSERT INTO position (sampleID, chrID, X, Y, Z, start_value, end_value) VALUES ($1, $2, $3, $4, $5, $6, $7);";
+    // Start transaction
+    PGresult* res = PQexec(conn, "BEGIN");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        std::cerr << "BEGIN command failed: " << PQerrorMessage(conn) << std::endl;
+        PQclear(res);
+        return;
+    }
+    PQclear(res);
 
-    for (Node node : chain)
-    {
-        const char* params[7];
+    // Prepare the insert query
+    std::string insertQuery = "INSERT INTO position (sampleID, chrID, X, Y, Z, start_value, end_value) VALUES ";
+    std::vector<std::string> valueSets;
+    const int numParams = 7;
+    std::vector<const char*> params;
 
-        char rep_id_str[12];
+    for (Node node : chain) {
+        char rep_id_str[12], x_str[32], y_str[32], z_str[32];
         snprintf(rep_id_str, sizeof(rep_id_str), "%u", rep_id);
-
-        char x_str[32], y_str[32], z_str[32];
         snprintf(x_str, sizeof(x_str), "%f", node.x);
         snprintf(y_str, sizeof(y_str), "%f", node.y);
         snprintf(z_str, sizeof(z_str), "%f", node.z);
-
-        params[0] = rep_id_str;
-        params[1] = job_prefix;
-        params[2] = x_str;
-        params[3] = y_str;
-        params[4] = z_str;
-
-        char start_str[12], end_str[12];
-        snprintf(start_str, sizeof(start_str), "%u", start);
-        snprintf(end_str, sizeof(end_str), "%u", end);
         
-        params[5] = start_str;
-        params[6] = end_str;
+        // Create value set for this node
+        std::string valueSet = "(" + std::string(rep_id_str) + ", '" + std::string(job_prefix) + "', " +
+                            std::string(x_str) + ", " + std::string(y_str) + ", " +
+                            std::string(z_str) + ", " + std::to_string(start) + ", " +
+                            std::to_string(end) + ")";
 
-        PGresult* res = PQexecParams(conn, insertQuery, 7, NULL, params, NULL, NULL, 0);
-        if (PQresultStatus(res) != PGRES_COMMAND_OK)
-        {
-            fprintf(stderr, "Insert failed: %s\n", PQerrorMessage(conn));
-            std::cerr << "Insert failed for node (" << node.x << ", " << node.y << ", " << node.z 
-                      << "): " << PQerrorMessage(conn) << std::endl;
-        }
-        else
-        {
-            std::cout << "Inserted sample with rep_id: " << rep_id 
-                      << ", job_prefix: " << job_prefix 
-                      << ", coordinates: (" << node.x << ", " << node.y << ", " << node.z << ")" << std::endl;
-        }
-
-        PQclear(res);
+        valueSets.push_back(valueSet);
     }
+
+    // Join all value sets with commas
+    insertQuery += join(valueSets, ", ");
+
+    // Execute the batch insert
+    res = PQexec(conn, insertQuery.c_str());
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        std::cerr << "Batch insert failed: " << PQerrorMessage(conn) << std::endl;
+    } else {
+        std::cout << "Inserted " << valueSets.size() << " samples successfully." << std::endl;
+    }
+    PQclear(res);
+
+    // Commit transaction
+    res = PQexec(conn, "COMMIT");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        std::cerr << "COMMIT command failed: " << PQerrorMessage(conn) << std::endl;
+    }
+    PQclear(res);
 }
 
 
