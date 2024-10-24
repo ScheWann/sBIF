@@ -69,7 +69,7 @@ int main(int argc, char* argv[])
         string chrmfile;
         unsigned start;
         unsigned end;
-        string out_folder;
+        // string out_folder;
         unsigned resolution = 2000;
         double fiber_density = 0.2368;
         unsigned n_samples = 50000;
@@ -137,8 +137,8 @@ int main(int argc, char* argv[])
                 item << it->second[0];
                 item >> end;
             }
-            if ((it->first.compare("o") == 0) || (it->first.compare("out") == 0))
-                out_folder = it->second[0];
+            // if ((it->first.compare("o") == 0) || (it->first.compare("out") == 0))
+            //     out_folder = it->second[0];
             if ((it->first.compare("r") == 0) || (it->first.compare("res") == 0))
             {
                 std::stringstream item;
@@ -202,16 +202,16 @@ int main(int argc, char* argv[])
         }
         double diam = getDiam(resolution, fiber_density);
         unsigned n_runs = n_samples / n_samples_per_run;
-        string command;
-        command = "mkdir -p " + out_folder;
-        std::system(command.c_str());
+        // string command;
+        // command = "mkdir -p " + out_folder;
+        // std::system(command.c_str());
         std::cout << "Parameters: " << endl;
         std::cout << "Interaction file :" << inter_file << endl;
         std::cout << "Chromosome :" << chrom << endl;
         std::cout << "Chrom lengths file :" << chrmfile << endl;
         std::cout << "Start position:" << start << endl;
         std::cout << "End position :" << end << endl;
-        std::cout << "Output folder :" << out_folder << endl;
+        // std::cout << "Output folder :" << out_folder << endl;
         std::cout << "Resolution :" << resolution << endl;
         std::cout << "Fiber density :" << fiber_density << endl;
         std::cout << "Number of samples :" << n_samples << endl;
@@ -230,7 +230,7 @@ int main(int argc, char* argv[])
         const char* inter_file_char = inter_file.c_str();
         const char* chrmfile_char = chrmfile.c_str();
         const char* chrom_char = chrom.c_str();
-        const char* out_folder_char = out_folder.c_str();
+        // const char* out_folder_char = out_folder.c_str();
         const char* job_prefix_char = job_prefix.c_str();
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
