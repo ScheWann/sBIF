@@ -234,7 +234,7 @@ int main(int argc, char* argv[])
         const char* job_prefix_char = job_prefix.c_str();
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
-
+        PGconn* conn = PQconnectdb("host=localhost port=5432 dbname=test user=siyuanzhao");
 
         clock_t begin, finish;
 
@@ -246,7 +246,8 @@ int main(int argc, char* argv[])
         {
             my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
             for (unsigned j = 0; j != n_samples_per_run; j++)
-                dumpSingleChain(chains[j], out_folder_char, i * n_samples_per_run + j, job_prefix_char);
+                // dumpSingleChain(chains[j], out_folder_char, i * n_samples_per_run + j, job_prefix_char);
+                insertSampleData(conn, chains[j], i * n_samples_per_run + j, job_prefix_char);
         }
         finish = clock();
         totaltime = (double)(finish-begin) / CLOCKS_PER_SEC;
