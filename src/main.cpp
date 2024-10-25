@@ -235,21 +235,19 @@ int main(int argc, char* argv[])
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
         // test
-        // PGconn* conn = PQconnectdb("host=localhost port=5432 dbname=test user=siyuanzhao");
-        PGconn* conn = PQconnectdb("host=db port=5432 dbname=chromosome_db user=admin password=chromosome");
-
+        // const char* conninfo = "host=localhost dbname=test user=siyuanzhao";
+        const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
         clock_t begin, finish;
 
         double totaltime;
         begin = clock();
+        
         #pragma omp parallel for num_threads(threads)
-
-        for (int i = 0; i < n_runs; ++i)
-        {
+        for (int i = 0; i < n_runs; ++i) {
             my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
-            for (unsigned j = 0; j != n_samples_per_run; j++)
-                // dumpSingleChain(chains[j], out_folder_char, i * n_samples_per_run + j, job_prefix_char);
-                insertSampleData(conn, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char);
+            for (unsigned j = 0; j != n_samples_per_run; j++) {
+                insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char);
+            }
         }
         finish = clock();
         totaltime = (double)(finish-begin) / CLOCKS_PER_SEC;

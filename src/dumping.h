@@ -15,6 +15,6 @@ void dumpSingleChain(my_chain& chain, const char* out_folder, unsigned rep_id, c
 
 void dumpEnsemble(my_ensemble& chains, const char* out_folder, const char* job_prefix);
 
-void insertSampleData(PGconn* conn, my_chain& chain, unsigned start, unsigned end, unsigned rep_id, const char* job_prefix);
+void insertSampleData(const char* conninfo, my_chain& chain, unsigned start, unsigned end, unsigned rep_id, const char* job_prefix);
 
 #endif //SBIF_DUMPING_H

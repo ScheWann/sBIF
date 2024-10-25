@@ -51,26 +51,19 @@ std::string join(const std::vector<std::string>& elements, const std::string& de
     return oss.str();
 }
 
-void insertSampleData(PGconn* conn, my_chain& chain, unsigned start, unsigned end, unsigned rep_id, const char* job_prefix) {
-    if (conn == NULL) {
-        std::cerr << "Connection to database failed!" << std::endl;
+void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix)
+{
+        // Establish a new connection for this thread
+    PGconn* conn = PQconnectdb(conninfo);
+    if (PQstatus(conn) != CONNECTION_OK) {
+        std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
+        PQfinish(conn);
         return;
     }
-
-    // Start transaction
-    PGresult* res = PQexec(conn, "BEGIN");
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        std::cerr << "BEGIN command failed: " << PQerrorMessage(conn) << std::endl;
-        PQclear(res);
-        return;
-    }
-    PQclear(res);
 
     // Prepare the insert query
     std::string insertQuery = "INSERT INTO position (sampleID, chrID, X, Y, Z, start_value, end_value) VALUES ";
     std::vector<std::string> valueSets;
-    const int numParams = 7;
-    std::vector<const char*> params;
 
     for (Node node : chain) {
         char rep_id_str[12], x_str[32], y_str[32], z_str[32];
@@ -78,13 +71,12 @@ void insertSampleData(PGconn* conn, my_chain& chain, unsigned start, unsigned en
         snprintf(x_str, sizeof(x_str), "%f", node.x);
         snprintf(y_str, sizeof(y_str), "%f", node.y);
         snprintf(z_str, sizeof(z_str), "%f", node.z);
-        
+
         // Create value set for this node
         std::string valueSet = "(" + std::string(rep_id_str) + ", '" + std::string(job_prefix) + "', " +
                             std::string(x_str) + ", " + std::string(y_str) + ", " +
                             std::string(z_str) + ", " + std::to_string(start) + ", " +
                             std::to_string(end) + ")";
-
         valueSets.push_back(valueSet);
     }
 
@@ -92,23 +84,19 @@ void insertSampleData(PGconn* conn, my_chain& chain, unsigned start, unsigned en
     insertQuery += join(valueSets, ", ");
 
     // Execute the batch insert
-    res = PQexec(conn, insertQuery.c_str());
+    PGresult* res = PQexec(conn, insertQuery.c_str());
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         std::cerr << "Batch insert failed: " << PQerrorMessage(conn) << std::endl;
     } else {
         std::cout << "Inserted " 
-            << job_prefix << start << "-" << end 
+            << job_prefix << "." << start << "-" << end 
             << " (" << valueSets.size() << " samples) successfully." 
             << std::endl;
     }
     PQclear(res);
 
-    // Commit transaction
-    res = PQexec(conn, "COMMIT");
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        std::cerr << "COMMIT command failed: " << PQerrorMessage(conn) << std::endl;
-    }
-    PQclear(res);
+    // Close the connection for this thread
+    PQfinish(conn);
 }
 
 
