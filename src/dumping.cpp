@@ -96,7 +96,10 @@ void insertSampleData(PGconn* conn, my_chain& chain, unsigned start, unsigned en
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         std::cerr << "Batch insert failed: " << PQerrorMessage(conn) << std::endl;
     } else {
-        std::cout << "Inserted " << valueSets.size() << " samples successfully." << std::endl;
+        std::cout << "Inserted " 
+            << job_prefix << start << "-" << end 
+            << " (" << valueSets.size() << " samples) successfully." 
+            << std::endl;
     }
     PQclear(res);
 
