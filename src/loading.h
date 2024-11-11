@@ -13,8 +13,8 @@ map<const string, unsigned int> getChrmLens(const char* chrmfile);
 vectord2d readInterFiveCols(const char* inter_file, vectord2d& weights, const char* chrom,
     const char* chrmfile, unsigned start, unsigned end, unsigned resolution);
 
-vectord2d readInterSixCols(const char* inter_file, vectord2d& weights, const char* chrom, const char* chrmfile,
-    unsigned start, unsigned end, unsigned resolution, const char* cell_line);
+// vectord2d readInterSixCols(const char* inter_file, vectord2d& weights, const char* chrom, const char* chrmfile,
+//     unsigned start, unsigned end, unsigned resolution, const char* cell_line);
 void getInterNum(vectord2d& inter, unsigned n_samples, bool scaling = false, const unsigned scale_diagonal = 1);
 
 #endif //SBIF_LOADING_H once

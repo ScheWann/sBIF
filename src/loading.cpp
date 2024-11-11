@@ -90,66 +90,66 @@ vectord2d readInterFiveCols(const char *inter_file, vectord2d &weights, const ch
     return inter;
 }
 
-vectord2d readInterSixCols(const char *inter_file, vectord2d &weights, const char *chrom,
-                            const char *chrmfile, unsigned start, unsigned end, unsigned resolution,
-                            const char *cell_line)
-{
-    map<const string, unsigned int> all_chrm_lens = getChrmLens(chrmfile);
-    unsigned chrm_size = all_chrm_lens[chrom];
-    std::logic_error error("The chromosome does not exist!");
-    if (chrm_size <= 0)
-        throw std::exception(error);
-    assert((start >= 0) && (start < chrm_size));
-    assert((end > 0) && (end <= chrm_size));
-    unsigned region_size = end - start;
-    const unsigned bin_size = ((region_size % resolution == 0) ? (region_size / resolution) : (region_size / resolution + 1));
-    const unsigned bin_start = start / resolution;
-    vectord2d inter(bin_size, vectord(bin_size));
+// vectord2d readInterSixCols(const char *inter_file, vectord2d &weights, const char *chrom,
+//                             const char *chrmfile, unsigned start, unsigned end, unsigned resolution,
+//                             const char *cell_line)
+// {
+//     map<const string, unsigned int> all_chrm_lens = getChrmLens(chrmfile);
+//     unsigned chrm_size = all_chrm_lens[chrom];
+//     std::logic_error error("The chromosome does not exist!");
+//     if (chrm_size <= 0)
+//         throw std::exception(error);
+//     assert((start >= 0) && (start < chrm_size));
+//     assert((end > 0) && (end <= chrm_size));
+//     unsigned region_size = end - start;
+//     const unsigned bin_size = ((region_size % resolution == 0) ? (region_size / resolution) : (region_size / resolution + 1));
+//     const unsigned bin_start = start / resolution;
+//     vectord2d inter(bin_size, vectord(bin_size));
 
-    FILE *file = fopen(inter_file, "r");
-    if (file == NULL)
-    {
-        fprintf(stderr, "The interaction file cannot be opened!\n");
-        exit(1);
-    }
+//     FILE *file = fopen(inter_file, "r");
+//     if (file == NULL)
+//     {
+//         fprintf(stderr, "The interaction file cannot be opened!\n");
+//         exit(1);
+//     }
 
-    char line[MAX_CHAR];
-    char file_cell_line[50];
-    char chrm_name[50];
-    unsigned int bin1, bin2;
-    double freq, weight;
+//     char line[MAX_CHAR];
+//     char file_cell_line[50];
+//     char chrm_name[50];
+//     unsigned int bin1, bin2;
+//     double freq, weight;
 
-    while (fgets(line, MAX_CHAR, file) != NULL)
-    {
-        // read 6 columns: cell_line, chrm_name, bin1, bin2, freq, weight
-        int num = sscanf(line, "%s %s %u %u %lf %lf", file_cell_line, chrm_name, &bin1, &bin2, &freq, &weight);
-        if (num != 6)
-        {
-            fprintf(stderr, "The interaction file should have six columns (cell_line chrm_name bin1 bin2 freq weight)!\n");
-            exit(1);
-        }
+//     while (fgets(line, MAX_CHAR, file) != NULL)
+//     {
+//         // read 6 columns: cell_line, chrm_name, bin1, bin2, freq, weight
+//         int num = sscanf(line, "%s %s %u %u %lf %lf", file_cell_line, chrm_name, &bin1, &bin2, &freq, &weight);
+//         if (num != 6)
+//         {
+//             fprintf(stderr, "The interaction file should have six columns (cell_line chrm_name bin1 bin2 freq weight)!\n");
+//             exit(1);
+//         }
 
-        if (strcmp(file_cell_line, cell_line) == 0 && strcmp(chrm_name, chrom) == 0)
-        {
-            bin1 = bin1 / resolution - bin_start;
-            bin2 = bin2 / resolution - bin_start;
-            if ((bin1 < 0) || (bin2 < 0))
-                continue;
-            if ((bin1 >= bin_size) || (bin2 >= bin_size))
-                continue;
-            if (weight < 0)
-                continue;
+//         if (strcmp(file_cell_line, cell_line) == 0 && strcmp(chrm_name, chrom) == 0)
+//         {
+//             bin1 = bin1 / resolution - bin_start;
+//             bin2 = bin2 / resolution - bin_start;
+//             if ((bin1 < 0) || (bin2 < 0))
+//                 continue;
+//             if ((bin1 >= bin_size) || (bin2 >= bin_size))
+//                 continue;
+//             if (weight < 0)
+//                 continue;
 
-            inter[bin1][bin2] = freq;
-            inter[bin2][bin1] = freq;
-            weights[bin1][bin2] = weight;
-            weights[bin2][bin1] = weight;
-        }
-    }
+//             inter[bin1][bin2] = freq;
+//             inter[bin2][bin1] = freq;
+//             weights[bin1][bin2] = weight;
+//             weights[bin2][bin1] = weight;
+//         }
+//     }
 
-    fclose(file);
-    return inter;
-}
+//     fclose(file);
+//     return inter;
+// }
 
 
 void getInterNum(vectord2d &inter, unsigned n_samples, bool scaling, const unsigned scale_diagonal)

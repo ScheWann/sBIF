@@ -12,71 +12,71 @@
 #include <sstream>
 #include <thread>
 
-using namespace std;
-std::mutex mtx;
-std::condition_variable cv;
-unsigned curExampleNum = 0;
-bool isReadyToDisplay = false;
-using Matrix3D = std::vector<std::vector<std::vector<float>>>;
+// using namespace std;
+// std::mutex mtx;
+// std::condition_variable cv;
+// unsigned curExampleNum = 0;
+// bool isReadyToDisplay = false;
+// using Matrix3D = std::vector<std::vector<std::vector<float>>>;
 
-Matrix3D insertExampleData(std::vector<Node> &chain, unsigned rep_id)
-{
-    Matrix3D matrix;
+// Matrix3D insertExampleData(std::vector<Node> &chain, unsigned rep_id)
+// {
+//     Matrix3D matrix;
 
-    if (matrix.size() <= rep_id)
-    {
-        matrix.resize(rep_id + 1);
-    }
+//     if (matrix.size() <= rep_id)
+//     {
+//         matrix.resize(rep_id + 1);
+//     }
 
-    std::vector<std::vector<float>> xyzMatrix(chain.size(), std::vector<float>(3));
+//     std::vector<std::vector<float>> xyzMatrix(chain.size(), std::vector<float>(3));
 
-    for (unsigned index = 0; index < chain.size(); ++index)
-    {
-        Node node = chain[index];
-        xyzMatrix[index][0] = node.x;
-        xyzMatrix[index][1] = node.y;
-        xyzMatrix[index][2] = node.z;
-    }
+//     for (unsigned index = 0; index < chain.size(); ++index)
+//     {
+//         Node node = chain[index];
+//         xyzMatrix[index][0] = node.x;
+//         xyzMatrix[index][1] = node.y;
+//         xyzMatrix[index][2] = node.z;
+//     }
 
-    matrix[rep_id] = xyzMatrix;
-    cout << "Writing xyz matrix " << rep_id << " ..." << endl;
-    return matrix;
-}
+//     matrix[rep_id] = xyzMatrix;
+//     cout << "Writing xyz matrix " << rep_id << " ..." << endl;
+//     return matrix;
+// }
 
-void insertExampleDataInParallel(std::vector<std::vector<Node>> &chains, unsigned n_examples, const char *job_prefix_char)
-{
-    std::vector<Matrix3D> allMatrices;
-    allMatrices.reserve(n_examples);
+// void insertExampleDataInParallel(std::vector<std::vector<Node>> &chains, unsigned n_examples, const char *job_prefix_char)
+// {
+//     std::vector<Matrix3D> allMatrices;
+//     allMatrices.reserve(n_examples);
 
-    std::mutex mtx;
-    unsigned curExampleNum = 0;
-    bool isReadyToDisplay = false;
-    std::condition_variable cv;
+//     std::mutex mtx;
+//     unsigned curExampleNum = 0;
+//     bool isReadyToDisplay = false;
+//     std::condition_variable cv;
 
-    std::vector<std::thread> threads;
-    for (unsigned j = 0; j < n_examples; ++j)
-    {
-        threads.push_back(std::thread([&]()
-                                      {
-            Matrix3D matrix = insertExampleData(chains[j], j);
-            {
-                std::lock_guard<std::mutex> lock(mtx);
-                allMatrices.push_back(matrix);
-                ++curExampleNum;
-            }
+//     std::vector<std::thread> threads;
+//     for (unsigned j = 0; j < n_examples; ++j)
+//     {
+//         threads.push_back(std::thread([&]()
+//                                       {
+//             Matrix3D matrix = insertExampleData(chains[j], j);
+//             {
+//                 std::lock_guard<std::mutex> lock(mtx);
+//                 allMatrices.push_back(matrix);
+//                 ++curExampleNum;
+//             }
 
-            if (curExampleNum == n_examples) {
-                std::lock_guard<std::mutex> lock(mtx);
-                isReadyToDisplay = true;
-                cv.notify_all();
-            } }));
-    }
+//             if (curExampleNum == n_examples) {
+//                 std::lock_guard<std::mutex> lock(mtx);
+//                 isReadyToDisplay = true;
+//                 cv.notify_all();
+//             } }));
+//     }
 
-    for (auto &t : threads)
-    {
-        t.join();
-    }
-}
+//     for (auto &t : threads)
+//     {
+//         t.join();
+//     }
+// }
 
 int main(int argc, char *argv[])
 {
@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
     pa.AddArgType("l", "chrlens", ParsingArgs::MUST);
     pa.AddArgType("s", "start", ParsingArgs::MUST);
     pa.AddArgType("e", "end", ParsingArgs::MUST);
-    // pa.AddArgType("cl", "cell_line", ParsingArgs::MUST);
+    pa.AddArgType("cl", "cell_line", ParsingArgs::MUST);
     pa.AddArgType("o", "out", ParsingArgs::MAYBE);
     pa.AddArgType("r", "res", ParsingArgs::MAYBE);
     pa.AddArgType("ex", "example", ParsingArgs::MAYBE);
@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
         string inter_file;
         string chrom;
         string chrmfile;
-        // string cell_line;
+        string cell_line;
         unsigned start;
         unsigned end;
         // string out_folder;
@@ -163,12 +163,12 @@ int main(int argc, char *argv[])
             printHelp();
             return 0;
         }
-        // if ((result.find("cl") == result.end()) && (result.find("cell_line") == result.end()))
-        // {
-        //     cout << "Error: missing required parameters..." << endl;
-        //     printHelp();
-        //     return 0;
-        // }
+        if ((result.find("cl") == result.end()) && (result.find("cell_line") == result.end()))
+        {
+            cout << "Error: missing required parameters..." << endl;
+            printHelp();
+            return 0;
+        }
         if ((result.find("c") == result.end()) && (result.find("chrom") == result.end()))
         {
             cout << "Error: missing required parameters..." << endl;
@@ -214,6 +214,12 @@ int main(int argc, char *argv[])
                 item << it->second[0];
                 item >> end;
             }
+            if ((it->first.compare("cl") == 0) || (it->first.compare("cell_line") == 0))
+            {
+                std::stringstream item;
+                item << it->second[0];
+                item >> cell_line;
+            }    
             if ((it->first.compare("ex") == 0) || (it->first.compare("example") == 0))
             {
                 std::stringstream item;
@@ -300,7 +306,7 @@ int main(int argc, char *argv[])
         std::cout << "Chrom lengths file :" << chrmfile << endl;
         std::cout << "Start position:" << start << endl;
         std::cout << "End position :" << end << endl;
-        // std::cout << "Cell line :" << cell_line << endl;
+        std::cout << "Cell line :" << cell_line << endl;
         // std::cout << "Output folder :" << out_folder << endl;
         std::cout << "Examples showing :" << n_examples << endl;
         std::cout << "Resolution :" << resolution << endl;
@@ -321,14 +327,14 @@ int main(int argc, char *argv[])
         const char *inter_file_char = inter_file.c_str();
         const char *chrmfile_char = chrmfile.c_str();
         const char *chrom_char = chrom.c_str();
-        // const char *cell_line_char = cell_line.c_str();
+        const char *cell_line_char = cell_line.c_str();
         // const char* out_folder_char = out_folder.c_str();
         const char *job_prefix_char = job_prefix.c_str();
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         // vectord2d inter = readInterSixCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution, cell_line_char);
         getInterNum(inter, n_samples_per_run, false, 1);
         // test
-        // const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
+        const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
         // const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
         clock_t begin, finish;
         double totaltime;
@@ -338,7 +344,7 @@ int main(int argc, char *argv[])
         for (int i = 0; i < n_runs; ++i)
         {
             my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
-            std::thread displayThread(insertExampleDataInParallel, std::ref(chains), n_examples, job_prefix_char);
+            // std::thread displayThread(insertExampleDataInParallel, std::ref(chains), n_examples, job_prefix_char);
             // wait for the display thread to finish
             // std::unique_lock<std::mutex> lock(mtx);
             // cv.wait(lock, []
@@ -348,8 +354,8 @@ int main(int argc, char *argv[])
             std::cout << "display " << n_examples << "3D chromosome data" << std::endl;
             for (unsigned j = 0; j != n_samples_per_run; j++)
             {
-                // insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char);
-                allDistanceMatrix(chains[j]);
+                insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char, cell_line_char);
+                // allDistanceMatrix(chains[j]);
             }
         }
 

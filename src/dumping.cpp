@@ -137,7 +137,7 @@ std::string join(const std::vector<std::string>& elements, const std::string& de
     return oss.str();
 }
 
-void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix)
+void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
 {
     // Establish a new connection for this thread
     PGconn* conn = PQconnectdb(conninfo);
@@ -148,7 +148,7 @@ void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, uns
     }
 
     // Prepare the insert query
-    std::string insertQuery = "INSERT INTO position (sampleID, chrID, X, Y, Z, start_value, end_value) VALUES ";
+    std::string insertQuery = "INSERT INTO position (cell_line, chrID, sampleID, X, Y, Z, start_value, end_value) VALUES ";
     std::vector<std::string> valueSets;
 
     for (Node node : chain) {
@@ -159,10 +159,11 @@ void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, uns
         snprintf(z_str, sizeof(z_str), "%f", node.z);
 
         // Create value set for this node
-        std::string valueSet = "(" + std::string(rep_id_str) + ", '" + std::string(job_prefix) + "', " +
-                            std::string(x_str) + ", " + std::string(y_str) + ", " +
-                            std::string(z_str) + ", " + std::to_string(start) + ", " +
-                            std::to_string(end) + ")";
+        std::string valueSet = "('" + std::string(cell_line) + "', '" + std::string(job_prefix) + "', " +
+                                std::string(rep_id_str) + ", " +
+                                std::string(x_str) + ", " + std::string(y_str) + ", " +
+                                std::string(z_str) + ", " + std::to_string(start) + ", " +
+                                std::to_string(end) + ")";
         valueSets.push_back(valueSet);
     }
 
@@ -175,6 +176,7 @@ void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, uns
         std::cerr << "Batch insert failed: " << PQerrorMessage(conn) << std::endl;
     } else {
         std::cout << "Inserted " 
+            << cell_line << ": "
             << job_prefix << "." << start << "-" << end 
             << " (" << valueSets.size() << " samples) successfully." 
             << std::endl;
