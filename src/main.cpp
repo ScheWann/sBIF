@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
     pa.AddArgType("cl", "cell_line", ParsingArgs::MUST);
     pa.AddArgType("o", "out", ParsingArgs::MAYBE);
     pa.AddArgType("r", "res", ParsingArgs::MAYBE);
-    pa.AddArgType("ex", "example", ParsingArgs::MAYBE);
+    // pa.AddArgType("ex", "example", ParsingArgs::MAYBE);
     pa.AddArgType("do", "download", ParsingArgs::MAYBE);
     pa.AddArgType("d", "fibdens", ParsingArgs::MAYBE);
     pa.AddArgType("ns", "nsamp", ParsingArgs::MAYBE);
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
         unsigned resolution = 2000;
         double fiber_density = 0.2368;
         unsigned n_samples = 50000;
-        unsigned n_examples = 5;
+        // unsigned n_examples = 5;
         bool download = false;
         unsigned n_samples_per_run = 100;
         unsigned n_sphere = 50;
@@ -220,12 +220,12 @@ int main(int argc, char *argv[])
                 item << it->second[0];
                 item >> cell_line;
             }    
-            if ((it->first.compare("ex") == 0) || (it->first.compare("example") == 0))
-            {
-                std::stringstream item;
-                item << it->second[0];
-                item >> n_examples;
-            }
+            // if ((it->first.compare("ex") == 0) || (it->first.compare("example") == 0))
+            // {
+            //     std::stringstream item;
+            //     item << it->second[0];
+            //     item >> n_examples;
+            // }
             if ((it->first.compare("do") == 0) || (it->first.compare("download") == 0))
             {
                 std::stringstream item;
@@ -308,7 +308,7 @@ int main(int argc, char *argv[])
         std::cout << "End position :" << end << endl;
         std::cout << "Cell line :" << cell_line << endl;
         // std::cout << "Output folder :" << out_folder << endl;
-        std::cout << "Examples showing :" << n_examples << endl;
+        // std::cout << "Examples showing :" << n_examples << endl;
         std::cout << "Resolution :" << resolution << endl;
         std::cout << "Fiber density :" << fiber_density << endl;
         std::cout << "Number of samples :" << n_samples << endl;
@@ -351,7 +351,7 @@ int main(int argc, char *argv[])
             //         { return isReadyToDisplay; });
 
             // display the generated data
-            std::cout << "display " << n_examples << "3D chromosome data" << std::endl;
+            // std::cout << "display " << n_examples << "3D chromosome data" << std::endl;
             for (unsigned j = 0; j != n_samples_per_run; j++)
             {
                 insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char, cell_line_char);

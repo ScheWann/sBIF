@@ -4,7 +4,7 @@
 chrlensfile="../data/chromosome_sizes.txt"
 res=5000
 threads=50
-n_samples=5
+n_samples=3
 n_runs=1
 EXE_PATH=".././bin/sBIF"
 total_files=$(find ../data/folding_input -name "*.txt" | wc -l | xargs)
