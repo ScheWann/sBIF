@@ -6,10 +6,10 @@
 #include <stdexcept>
 #include "loading.h"
 
-map<const string, unsigned int> getChrmLens(const char* chrmfile)
+map<const string, unsigned int> getChrmLens(const char *chrmfile)
 {
     map<const string, unsigned int> all_chrm_lens;
-    FILE* file = fopen(chrmfile, "r");
+    FILE *file = fopen(chrmfile, "r");
     if (file == NULL)
     {
         fprintf(stderr, "The inputfile can not be opened!\n");
@@ -20,7 +20,8 @@ map<const string, unsigned int> getChrmLens(const char* chrmfile)
     unsigned int chrm_length;
     while (1)
     {
-        if (fgets(line, MAX_CHAR, file) == NULL) break;
+        if (fgets(line, MAX_CHAR, file) == NULL)
+            break;
         int num = sscanf(line, "%s %u", chrm_name, &chrm_length);
         if (num != 2)
         {
@@ -33,21 +34,21 @@ map<const string, unsigned int> getChrmLens(const char* chrmfile)
     return all_chrm_lens;
 }
 
-
-vectord2d readInterFiveCols(const char* inter_file, vectord2d& weights, const char* chrom,
-    const char* chrmfile, unsigned start, unsigned end, unsigned resolution)
+vectord2d readInterFiveCols(const char *inter_file, vectord2d &weights, const char *chrom,
+                            const char *chrmfile, unsigned start, unsigned end, unsigned resolution)
 {
     map<const string, unsigned int> all_chrm_lens = getChrmLens(chrmfile);
     unsigned chrm_size = all_chrm_lens[chrom];
     std::logic_error error("The chromosome does not exist!");
-    if (chrm_size <= 0) throw std::exception(error);
+    if (chrm_size <= 0)
+        throw std::exception(error);
     assert((start >= 0) && (start < chrm_size));
     assert((end > 0) && (end <= chrm_size));
     unsigned region_size = end - start;
     const unsigned bin_size = ((region_size % resolution == 0) ? (region_size / resolution) : (region_size / resolution + 1));
     const unsigned bin_start = start / resolution;
     vectord2d inter(bin_size, vectord(bin_size));
-    FILE* file = fopen(inter_file, "r");
+    FILE *file = fopen(inter_file, "r");
     if (file == NULL)
     {
         fprintf(stderr, "The interaction file can not be opened!\n");
@@ -61,7 +62,8 @@ vectord2d readInterFiveCols(const char* inter_file, vectord2d& weights, const ch
     double weight;
     while (1)
     {
-        if (fgets(line, MAX_CHAR, file) == NULL) break;
+        if (fgets(line, MAX_CHAR, file) == NULL)
+            break;
         int num = sscanf(line, "%s %u %u %lf %lf", chrm_name, &bin1, &bin2, &freq, &weight);
         if (num != 5)
         {
@@ -72,9 +74,12 @@ vectord2d readInterFiveCols(const char* inter_file, vectord2d& weights, const ch
         {
             bin1 = bin1 / resolution - bin_start;
             bin2 = bin2 / resolution - bin_start;
-            if ((bin1 < 0) || (bin2 < 0)) continue;
-            if ((bin1 >= bin_size) || (bin2 >= bin_size)) continue;
-            if (weight < 0) continue;
+            if ((bin1 < 0) || (bin2 < 0))
+                continue;
+            if ((bin1 >= bin_size) || (bin2 >= bin_size))
+                continue;
+            if (weight < 0)
+                continue;
             inter[bin1][bin2] = freq;
             inter[bin2][bin1] = freq;
             weights[bin1][bin2] = weight;
@@ -85,8 +90,69 @@ vectord2d readInterFiveCols(const char* inter_file, vectord2d& weights, const ch
     return inter;
 }
 
+vectord2d readInterSixCols(const char *inter_file, vectord2d &weights, const char *chrom,
+                            const char *chrmfile, unsigned start, unsigned end, unsigned resolution,
+                            const char *cell_line)
+{
+    map<const string, unsigned int> all_chrm_lens = getChrmLens(chrmfile);
+    unsigned chrm_size = all_chrm_lens[chrom];
+    std::logic_error error("The chromosome does not exist!");
+    if (chrm_size <= 0)
+        throw std::exception(error);
+    assert((start >= 0) && (start < chrm_size));
+    assert((end > 0) && (end <= chrm_size));
+    unsigned region_size = end - start;
+    const unsigned bin_size = ((region_size % resolution == 0) ? (region_size / resolution) : (region_size / resolution + 1));
+    const unsigned bin_start = start / resolution;
+    vectord2d inter(bin_size, vectord(bin_size));
 
-void getInterNum(vectord2d& inter, unsigned n_samples, bool scaling, const unsigned scale_diagonal)
+    FILE *file = fopen(inter_file, "r");
+    if (file == NULL)
+    {
+        fprintf(stderr, "The interaction file cannot be opened!\n");
+        exit(1);
+    }
+
+    char line[MAX_CHAR];
+    char file_cell_line[50];
+    char chrm_name[50];
+    unsigned int bin1, bin2;
+    double freq, weight;
+
+    while (fgets(line, MAX_CHAR, file) != NULL)
+    {
+        // read 6 columns: cell_line, chrm_name, bin1, bin2, freq, weight
+        int num = sscanf(line, "%s %s %u %u %lf %lf", file_cell_line, chrm_name, &bin1, &bin2, &freq, &weight);
+        if (num != 6)
+        {
+            fprintf(stderr, "The interaction file should have six columns (cell_line chrm_name bin1 bin2 freq weight)!\n");
+            exit(1);
+        }
+
+        if (strcmp(file_cell_line, cell_line) == 0 && strcmp(chrm_name, chrom) == 0)
+        {
+            bin1 = bin1 / resolution - bin_start;
+            bin2 = bin2 / resolution - bin_start;
+            if ((bin1 < 0) || (bin2 < 0))
+                continue;
+            if ((bin1 >= bin_size) || (bin2 >= bin_size))
+                continue;
+            if (weight < 0)
+                continue;
+
+            inter[bin1][bin2] = freq;
+            inter[bin2][bin1] = freq;
+            weights[bin1][bin2] = weight;
+            weights[bin2][bin1] = weight;
+        }
+    }
+
+    fclose(file);
+    return inter;
+}
+
+
+void getInterNum(vectord2d &inter, unsigned n_samples, bool scaling, const unsigned scale_diagonal)
 {
     if (scaling)
     {
@@ -96,7 +162,8 @@ void getInterNum(vectord2d& inter, unsigned n_samples, bool scaling, const unsig
         for (unsigned i = 0; i != locus_size - scale_diagonal; ++i)
         {
             diag_value += inter[i][i + scale_diagonal];
-            if (inter[i][i + scale_diagonal] != 0) num += 1;
+            if (inter[i][i + scale_diagonal] != 0)
+                num += 1;
         }
         diag_value /= num;
         for (unsigned i = 0; i != locus_size; ++i)

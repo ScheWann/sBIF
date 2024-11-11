@@ -1,24 +1,90 @@
 #include <iostream>
 #include <time.h>
 #include "optimization.h"
+#include <condition_variable>
+#include <vector>
+#include <ctime>
+#include <mutex>
 #include "dumping.h"
 #include "parsingargs.h"
 #include <string.h>
 #include "help.h"
 #include <sstream>
-
-
+#include <thread>
 
 using namespace std;
+std::mutex mtx;
+std::condition_variable cv;
+unsigned curExampleNum = 0;
+bool isReadyToDisplay = false;
+using Matrix3D = std::vector<std::vector<std::vector<float>>>;
 
+Matrix3D insertExampleData(std::vector<Node> &chain, unsigned rep_id)
+{
+    Matrix3D matrix;
 
-int main(int argc, char* argv[])
+    if (matrix.size() <= rep_id)
+    {
+        matrix.resize(rep_id + 1);
+    }
+
+    std::vector<std::vector<float>> xyzMatrix(chain.size(), std::vector<float>(3));
+
+    for (unsigned index = 0; index < chain.size(); ++index)
+    {
+        Node node = chain[index];
+        xyzMatrix[index][0] = node.x;
+        xyzMatrix[index][1] = node.y;
+        xyzMatrix[index][2] = node.z;
+    }
+
+    matrix[rep_id] = xyzMatrix;
+    cout << "Writing xyz matrix " << rep_id << " ..." << endl;
+    return matrix;
+}
+
+void insertExampleDataInParallel(std::vector<std::vector<Node>> &chains, unsigned n_examples, const char *job_prefix_char)
+{
+    std::vector<Matrix3D> allMatrices;
+    allMatrices.reserve(n_examples);
+
+    std::mutex mtx;
+    unsigned curExampleNum = 0;
+    bool isReadyToDisplay = false;
+    std::condition_variable cv;
+
+    std::vector<std::thread> threads;
+    for (unsigned j = 0; j < n_examples; ++j)
+    {
+        threads.push_back(std::thread([&]()
+                                      {
+            Matrix3D matrix = insertExampleData(chains[j], j);
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                allMatrices.push_back(matrix);
+                ++curExampleNum;
+            }
+
+            if (curExampleNum == n_examples) {
+                std::lock_guard<std::mutex> lock(mtx);
+                isReadyToDisplay = true;
+                cv.notify_all();
+            } }));
+    }
+
+    for (auto &t : threads)
+    {
+        t.join();
+    }
+}
+
+int main(int argc, char *argv[])
 {
 
     string tmpPara = "";
     for (int i = 1; i < argc; i++)
     {
-        //cout << i << "=" << argv[i] <<"---"<< endl;
+        // cout << i << "=" << argv[i] <<"---"<< endl;
         if (strlen(argv[i]) == 0)
         {
             std::cout << "find NULL" << endl;
@@ -30,16 +96,19 @@ int main(int argc, char* argv[])
         }
         tmpPara += " ";
     }
-    
-    map<string, vector<string> > result;
+
+    map<string, vector<string>> result;
     ParsingArgs pa;
     pa.AddArgType("i", "inter", ParsingArgs::MUST);
     pa.AddArgType("c", "chrom", ParsingArgs::MUST);
     pa.AddArgType("l", "chrlens", ParsingArgs::MUST);
     pa.AddArgType("s", "start", ParsingArgs::MUST);
     pa.AddArgType("e", "end", ParsingArgs::MUST);
+    // pa.AddArgType("cl", "cell_line", ParsingArgs::MUST);
     pa.AddArgType("o", "out", ParsingArgs::MAYBE);
     pa.AddArgType("r", "res", ParsingArgs::MAYBE);
+    pa.AddArgType("ex", "example", ParsingArgs::MAYBE);
+    pa.AddArgType("do", "download", ParsingArgs::MAYBE);
     pa.AddArgType("d", "fibdens", ParsingArgs::MAYBE);
     pa.AddArgType("ns", "nsamp", ParsingArgs::MAYBE);
     pa.AddArgType("nr", "nruns", ParsingArgs::MAYBE);
@@ -51,12 +120,11 @@ int main(int argc, char* argv[])
     pa.AddArgType("p", "threads", ParsingArgs::MAYBE);
     pa.AddArgType("h", "help", ParsingArgs::NO);
 
-
     result.clear();
-    //cout << "Input is:" << tmpPara << endl;
+    // cout << "Input is:" << tmpPara << endl;
     std::string errPos;
     int iRet = pa.Parse(tmpPara, result, errPos);
-    if ((0 > iRet)|| (tmpPara.empty()))
+    if ((0 > iRet) || (tmpPara.empty()))
     {
         std::cout << "Error: wrong options with flag " << iRet << endl;
         printHelp();
@@ -67,12 +135,15 @@ int main(int argc, char* argv[])
         string inter_file;
         string chrom;
         string chrmfile;
+        // string cell_line;
         unsigned start;
         unsigned end;
         // string out_folder;
         unsigned resolution = 2000;
         double fiber_density = 0.2368;
         unsigned n_samples = 50000;
+        unsigned n_examples = 5;
+        bool download = false;
         unsigned n_samples_per_run = 100;
         unsigned n_sphere = 50;
         unsigned ki_dist = 80;
@@ -92,6 +163,12 @@ int main(int argc, char* argv[])
             printHelp();
             return 0;
         }
+        // if ((result.find("cl") == result.end()) && (result.find("cell_line") == result.end()))
+        // {
+        //     cout << "Error: missing required parameters..." << endl;
+        //     printHelp();
+        //     return 0;
+        // }
         if ((result.find("c") == result.end()) && (result.find("chrom") == result.end()))
         {
             cout << "Error: missing required parameters..." << endl;
@@ -116,7 +193,7 @@ int main(int argc, char* argv[])
             printHelp();
             return 0;
         }
-        map<std::string, std::vector<std::string> >::iterator it = result.begin();
+        map<std::string, std::vector<std::string>>::iterator it = result.begin();
         for (; it != result.end(); ++it)
         {
             if ((it->first.compare("i") == 0) || (it->first.compare("inter") == 0))
@@ -136,6 +213,18 @@ int main(int argc, char* argv[])
                 std::stringstream item;
                 item << it->second[0];
                 item >> end;
+            }
+            if ((it->first.compare("ex") == 0) || (it->first.compare("example") == 0))
+            {
+                std::stringstream item;
+                item << it->second[0];
+                item >> n_examples;
+            }
+            if ((it->first.compare("do") == 0) || (it->first.compare("download") == 0))
+            {
+                std::stringstream item;
+                item << it->second[0];
+                item >> download;
             }
             // if ((it->first.compare("o") == 0) || (it->first.compare("out") == 0))
             //     out_folder = it->second[0];
@@ -195,10 +284,10 @@ int main(int argc, char* argv[])
             }
             if ((it->first.compare("j") == 0) || (it->first.compare("jobpre") == 0))
                 job_prefix = it->second[0];
-            //if ((it->first.compare("h")) == 0 || (it->first.compare("help") == 0))
+            // if ((it->first.compare("h")) == 0 || (it->first.compare("help") == 0))
             //{
-            //    printHelp();
-            //}
+            //     printHelp();
+            // }
         }
         double diam = getDiam(resolution, fiber_density);
         unsigned n_runs = n_samples / n_samples_per_run;
@@ -211,7 +300,9 @@ int main(int argc, char* argv[])
         std::cout << "Chrom lengths file :" << chrmfile << endl;
         std::cout << "Start position:" << start << endl;
         std::cout << "End position :" << end << endl;
+        // std::cout << "Cell line :" << cell_line << endl;
         // std::cout << "Output folder :" << out_folder << endl;
+        std::cout << "Examples showing :" << n_examples << endl;
         std::cout << "Resolution :" << resolution << endl;
         std::cout << "Fiber density :" << fiber_density << endl;
         std::cout << "Number of samples :" << n_samples << endl;
@@ -227,33 +318,53 @@ int main(int argc, char* argv[])
         unsigned region_size = end - start;
         unsigned n_nodes = (region_size % resolution == 0) ? (region_size / resolution) : (region_size / resolution + 1);
         vectord2d weights(n_nodes, vectord(n_nodes));
-        const char* inter_file_char = inter_file.c_str();
-        const char* chrmfile_char = chrmfile.c_str();
-        const char* chrom_char = chrom.c_str();
+        const char *inter_file_char = inter_file.c_str();
+        const char *chrmfile_char = chrmfile.c_str();
+        const char *chrom_char = chrom.c_str();
+        // const char *cell_line_char = cell_line.c_str();
         // const char* out_folder_char = out_folder.c_str();
-        const char* job_prefix_char = job_prefix.c_str();
+        const char *job_prefix_char = job_prefix.c_str();
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
+        // vectord2d inter = readInterSixCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution, cell_line_char);
         getInterNum(inter, n_samples_per_run, false, 1);
         // test
-        // const char* conninfo = "host=localhost dbname=test user=siyuanzhao";
-        const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
+        // const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
+        // const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
         clock_t begin, finish;
-
         double totaltime;
         begin = clock();
-        
+
         #pragma omp parallel for num_threads(threads)
-        for (int i = 0; i < n_runs; ++i) {
+        for (int i = 0; i < n_runs; ++i)
+        {
             my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
-            for (unsigned j = 0; j != n_samples_per_run; j++) {
-                insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char);
+            std::thread displayThread(insertExampleDataInParallel, std::ref(chains), n_examples, job_prefix_char);
+            // wait for the display thread to finish
+            // std::unique_lock<std::mutex> lock(mtx);
+            // cv.wait(lock, []
+            //         { return isReadyToDisplay; });
+
+            // display the generated data
+            std::cout << "display " << n_examples << "3D chromosome data" << std::endl;
+            for (unsigned j = 0; j != n_samples_per_run; j++)
+            {
+                // insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char);
+                allDistanceMatrix(chains[j]);
             }
         }
-        finish = clock();
-        totaltime = (double)(finish-begin) / CLOCKS_PER_SEC;
-        std::cout << "Total cost " << totaltime << " seconds!" << endl;
 
+        // if (download)
+        // {
+        //     // download all chromosome files
+        //     for (int i = 0; i < n_runs; ++i)
+        //     {
+        //         my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
+        //         createZipInMemory(chains, job_prefix);
+        //     }
+        // }
+        finish = clock();
+        totaltime = (double)(finish - begin) / CLOCKS_PER_SEC;
+        std::cout << "Total cost " << totaltime << " seconds!" << endl;
     }
     return 0;
 }
-

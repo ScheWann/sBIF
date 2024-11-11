@@ -20,7 +20,10 @@ void printHelp()
     cout << "     s  | start     REQUIRED, start position" << endl;
     cout << "     e  | end       REQUIRED, end position" << endl;
     cout << "     o  | out       REQUIRED, output folder" << endl;
+    // cout << "     cl | cell_line REQUIRED, cell line name" << endl;
     cout << "     r  | res       resolution, default: 2000" << endl;
+    cout << "     do | download  download all chromosome file, default: false" << endl;
+    cout << "     ex | example   print an example of the input files, default: 5" << endl;
     cout << "     d  | fibdens   fiber density, default: 0.2368" << endl;
     cout << "     ns | nsamp     total number of samples, default: 50000" << endl;
     cout << "     nr | nruns     number of samples per run, default: 100" << endl;
