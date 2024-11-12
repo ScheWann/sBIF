@@ -84,27 +84,27 @@ double calculateDistance(const Node node1, const Node node2) {
 }
 
 void generateDistanceFile(my_chain &chain, int chain_index, zip_t *zip_archive, const char *job_prefix_char, const char *cell_line_char, unsigned start, unsigned end) {
-    // 生成距离文件的名称
     char distance_filename[MAX_CHAR];
     snprintf(distance_filename, sizeof(distance_filename), "%s_%s_%u_%u_distance_%d.txt", job_prefix_char, cell_line_char, start, end, chain_index);
     
-    // 使用std::vector来存储生成的内容
+    // store the content of the distance file
     std::vector<char> distance_content;
-    distance_content.reserve(10000); // 预分配一个较大的空间来容纳文件内容，避免多次重新分配内存
+    // reserve memory for the content to avoid reallocation
+    distance_content.reserve(10000);
 
     int n_beads = chain.size();
     for (int i = 0; i < n_beads; ++i) {
-        for (int j = i + 1; j < n_beads; ++j) { // 计算每对bead的距离
+        for (int j = i + 1; j < n_beads; ++j) {
             double dist = calculateDistance(chain[i], chain[j]);
 
-            // 将每对bead的距离格式化并追加到distance_content中
-            char buffer[256]; // 临时缓冲区来存储单条信息
+            // Format the distance string and append it to the content vector
+            char buffer[256]; 
             int written = snprintf(buffer, sizeof(buffer), "Distance between bead %d and bead %d: %.3f\n", i, j, dist);
-            distance_content.insert(distance_content.end(), buffer, buffer + written); // 将结果插入到vector中
+            distance_content.insert(distance_content.end(), buffer, buffer + written);
         }
     }
 
-    // 将生成的距离文件内容添加到zip归档中
+    // store the content in a zip source
     zip_source_t *distance_source = zip_source_buffer(zip_archive, distance_content.data(), distance_content.size(), 0);
     if (distance_source == NULL) {
         fprintf(stderr, "Error creating zip source for distance file\n");
