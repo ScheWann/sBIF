@@ -23,7 +23,7 @@ for interfile in ../data/folding_input/*.txt; do
     job_prefix="$chrom"
 
     ## command
-    cmd="$EXE_PATH -i $interfile -c $chrom -l $chrlensfile -s $start -e $end -ns $n_samples -nr $n_runs -cl $cell_line -o $outfolder -r $res -do true -j $job_prefix -p $threads"
+    cmd="$EXE_PATH -i $interfile -c $chrom -l $chrlensfile -s $start -e $end -ns $n_samples -nr $n_runs -cl $cell_line -o $outfolder -r $res -do false -j $job_prefix -p $threads"
     
     echo "Processing file $count of $total_files: $filename"
     echo "Running command: $cmd"

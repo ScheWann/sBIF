@@ -334,7 +334,9 @@ int main(int argc, char *argv[])
                     fprintf(stderr, "Error closing zip file\n");
                     exit(1);
                 }
-                printf("Successfully created zip file: %s\n", out_file);
+                if (download) {
+                    printf("Successfully created zip file: %s\n", out_file);
+                }
             }
         }
 
