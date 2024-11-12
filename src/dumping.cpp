@@ -1,7 +1,12 @@
 #include "dumping.h"
 #include <libpq-fe.h>
 #include <sstream>
-#include <zip.h> 
+#include <cstdio>
+#include <cstdlib>
+#include <iostream>
+#include <zlib.h>
+#include <zip.h>
+#include <filesystem>
 
 char* getOutfile(const char* out_folder, unsigned rep_id, const char* job_prefix)
 {
@@ -22,99 +27,39 @@ char* getOutfile(const char* out_folder, unsigned rep_id, const char* job_prefix
 
 }
 
-void dumpSingleChain(my_chain& chain, const char* out_folder, unsigned rep_id, const char* job_prefix)
+void dumpSingleChainToZip(zip_t *zip_archive, my_chain& chain, unsigned rep_id, const char* job_prefix, const char* cell_line, unsigned start, unsigned end)
 {
-    char* out_file = getOutfile(out_folder, rep_id, job_prefix);
-    FILE* output = fopen(out_file, "w");
-    if (output == NULL)
-    {
-        fprintf(stderr, "The output file can not be opened!\n");
-        exit(1);
-    }
-    fprintf(output, "rep_id: %u, job_prefix: %s\n", rep_id, job_prefix);
+    // generate text for each chain
+    char file_name[128];
+    snprintf(file_name, sizeof(file_name), "%s.%s.%u.%u.%u.txt", cell_line, job_prefix, start, end, rep_id);
+
+    // write the chain data to a string
+    std::string chain_data;
+    char header[128];
+    snprintf(header, sizeof(header), "cell_line: %s, job_prefix: %s, rep_id: %u, start:%u, end: %u \n", cell_line, job_prefix, rep_id, start, end);
+    chain_data.append(header);
+
     for (Node node : chain)
     {
-        fprintf(output, "%f\t%f\t%f\n", node.x, node.y, node.z);
+        char line[128];
+        snprintf(line, sizeof(line), "%f\t%f\t%f\n", node.x, node.y, node.z);
+        chain_data.append(line);
     }
-    fclose(output);
-    //cout<<"Writing sample "<<rep_id<<" ..."<<endl;
+
+    // add the chain data to the zip archive
+    zip_source_t *source = zip_source_buffer(zip_archive, chain_data.c_str(), chain_data.size(), 0);
+    if (source == NULL)
+    {
+        fprintf(stderr, "Error creating zip source for chain %u\n", rep_id);
+        exit(1);
+    }
+
+    if (zip_file_add(zip_archive, file_name, source, ZIP_FL_OVERWRITE) < 0)
+    {
+        fprintf(stderr, "Error adding file to zip archive: %s\n", zip_strerror(zip_archive));
+        exit(1);
+    }
 }
-
-std::vector<char> createZipInMemory(const std::vector<my_chain>& chains, const std::string& job_prefix) {
-    zip_source_t *source = nullptr;
-    zip_t *archive = nullptr;
-    zip_error_t error;
-
-    // Initialize zip_error_t
-    zip_error_init(&error);
-
-    // Create the ZIP source buffer
-    source = zip_source_buffer_create(nullptr, 0, 0, &error);
-    if (!source) {
-        std::string errorMsg = "Failed to create ZIP source buffer: " + std::string(zip_error_strerror(&error));
-        zip_error_fini(&error);
-        throw std::runtime_error(errorMsg);
-    }
-
-    // Open the archive from the source
-    archive = zip_open_from_source(source, ZIP_CREATE, &error);
-    if (!archive) {
-        std::string errorMsg = "Failed to open ZIP archive: " + std::string(zip_error_strerror(&error));
-        zip_source_free(source);
-        zip_error_fini(&error);
-        throw std::runtime_error(errorMsg);
-    }
-
-    // Add files to the archive
-    for (size_t i = 0; i < chains.size(); ++i) {
-        const my_chain& chain = chains[i];
-        
-        // Create the content for each chain
-        std::ostringstream oss;
-        oss << "rep_id: " << i << ", job_prefix: " << job_prefix << "\n";
-        for (const Node& node : chain) {
-            oss << node.x << "\t" << node.y << "\t" << node.z << "\n";
-        }
-        std::string data = oss.str();
-
-        // Create a filename
-        std::string filename = job_prefix + "_chain_" + std::to_string(i) + ".txt";
-
-        // Add file to archive
-        zip_source_t* data_source = zip_source_buffer_create(data.c_str(), data.size(), 0, &error);
-        if (!data_source || zip_file_add(archive, filename.c_str(), data_source, ZIP_FL_OVERWRITE) == -1) {
-            zip_source_free(data_source);  // Free data source if adding failed
-            std::string errorMsg = "Failed to add file to ZIP archive: " + std::string(zip_error_strerror(&error));
-            zip_discard(archive);  // Discard archive if we fail
-            zip_error_fini(&error);
-            throw std::runtime_error(errorMsg);
-        }
-    }
-
-    // Close the archive
-    if (zip_close(archive) == -1) {
-        zip_source_free(source);
-        zip_error_fini(&error);
-        throw std::runtime_error("Failed to close ZIP archive");
-    }
-
-    // Get the data from the ZIP source buffer
-    zip_stat_t zip_stat;
-    zip_stat_init(&zip_stat);
-    zip_stat_index(archive, 0, 0, &zip_stat);
-
-    // Read the data from the ZIP source buffer
-    std::vector<char> zip_data(zip_stat.size);
-    zip_source_open(source);
-    zip_source_read(source, zip_data.data(), zip_stat.size);
-    zip_source_close(source);
-
-    // Clean up the error object
-    zip_error_fini(&error);
-
-    return zip_data;
-}
-
 
 // Euclidean distance calculation function
 double calculateDistance(const Node& node1, const Node& node2) {

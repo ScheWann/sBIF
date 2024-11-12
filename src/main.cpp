@@ -12,72 +12,6 @@
 #include <sstream>
 #include <thread>
 
-// using namespace std;
-// std::mutex mtx;
-// std::condition_variable cv;
-// unsigned curExampleNum = 0;
-// bool isReadyToDisplay = false;
-// using Matrix3D = std::vector<std::vector<std::vector<float>>>;
-
-// Matrix3D insertExampleData(std::vector<Node> &chain, unsigned rep_id)
-// {
-//     Matrix3D matrix;
-
-//     if (matrix.size() <= rep_id)
-//     {
-//         matrix.resize(rep_id + 1);
-//     }
-
-//     std::vector<std::vector<float>> xyzMatrix(chain.size(), std::vector<float>(3));
-
-//     for (unsigned index = 0; index < chain.size(); ++index)
-//     {
-//         Node node = chain[index];
-//         xyzMatrix[index][0] = node.x;
-//         xyzMatrix[index][1] = node.y;
-//         xyzMatrix[index][2] = node.z;
-//     }
-
-//     matrix[rep_id] = xyzMatrix;
-//     cout << "Writing xyz matrix " << rep_id << " ..." << endl;
-//     return matrix;
-// }
-
-// void insertExampleDataInParallel(std::vector<std::vector<Node>> &chains, unsigned n_examples, const char *job_prefix_char)
-// {
-//     std::vector<Matrix3D> allMatrices;
-//     allMatrices.reserve(n_examples);
-
-//     std::mutex mtx;
-//     unsigned curExampleNum = 0;
-//     bool isReadyToDisplay = false;
-//     std::condition_variable cv;
-
-//     std::vector<std::thread> threads;
-//     for (unsigned j = 0; j < n_examples; ++j)
-//     {
-//         threads.push_back(std::thread([&]()
-//                                       {
-//             Matrix3D matrix = insertExampleData(chains[j], j);
-//             {
-//                 std::lock_guard<std::mutex> lock(mtx);
-//                 allMatrices.push_back(matrix);
-//                 ++curExampleNum;
-//             }
-
-//             if (curExampleNum == n_examples) {
-//                 std::lock_guard<std::mutex> lock(mtx);
-//                 isReadyToDisplay = true;
-//                 cv.notify_all();
-//             } }));
-//     }
-
-//     for (auto &t : threads)
-//     {
-//         t.join();
-//     }
-// }
-
 int main(int argc, char *argv[])
 {
 
@@ -138,7 +72,7 @@ int main(int argc, char *argv[])
         string cell_line;
         unsigned start;
         unsigned end;
-        // string out_folder;
+        string out_folder;
         unsigned resolution = 2000;
         double fiber_density = 0.2368;
         unsigned n_samples = 50000;
@@ -219,21 +153,25 @@ int main(int argc, char *argv[])
                 std::stringstream item;
                 item << it->second[0];
                 item >> cell_line;
-            }    
+            }
             // if ((it->first.compare("ex") == 0) || (it->first.compare("example") == 0))
             // {
             //     std::stringstream item;
             //     item << it->second[0];
             //     item >> n_examples;
             // }
-            if ((it->first.compare("do") == 0) || (it->first.compare("download") == 0))
+            if ((it->first == "do") || (it->first == "download"))
             {
-                std::stringstream item;
-                item << it->second[0];
-                item >> download;
+                std::string item = it->second[0];
+
+                item = item.erase(0, item.find_first_not_of(" \t\n\r"));
+                item = item.erase(item.find_last_not_of(" \t\n\r") + 1);
+
+                std::cout << "Trimmed item value: '" << item << "'" << std::endl; // 输出修剪后的值
+                download = (item == "true" || item == "1");
             }
-            // if ((it->first.compare("o") == 0) || (it->first.compare("out") == 0))
-            //     out_folder = it->second[0];
+            if ((it->first.compare("o") == 0) || (it->first.compare("out") == 0))
+                out_folder = it->second[0];
             if ((it->first.compare("r") == 0) || (it->first.compare("res") == 0))
             {
                 std::stringstream item;
@@ -290,10 +228,10 @@ int main(int argc, char *argv[])
             }
             if ((it->first.compare("j") == 0) || (it->first.compare("jobpre") == 0))
                 job_prefix = it->second[0];
-            // if ((it->first.compare("h")) == 0 || (it->first.compare("help") == 0))
-            //{
-            //     printHelp();
-            // }
+            if ((it->first.compare("h")) == 0 || (it->first.compare("help") == 0))
+            {
+                printHelp();
+            }
         }
         double diam = getDiam(resolution, fiber_density);
         unsigned n_runs = n_samples / n_samples_per_run;
@@ -307,7 +245,8 @@ int main(int argc, char *argv[])
         std::cout << "Start position:" << start << endl;
         std::cout << "End position :" << end << endl;
         std::cout << "Cell line :" << cell_line << endl;
-        // std::cout << "Output folder :" << out_folder << endl;
+        std::cout << "Download :" << download << endl;
+        std::cout << "Output folder :" << out_folder << endl;
         // std::cout << "Examples showing :" << n_examples << endl;
         std::cout << "Resolution :" << resolution << endl;
         std::cout << "Fiber density :" << fiber_density << endl;
@@ -328,46 +267,75 @@ int main(int argc, char *argv[])
         const char *chrmfile_char = chrmfile.c_str();
         const char *chrom_char = chrom.c_str();
         const char *cell_line_char = cell_line.c_str();
-        // const char* out_folder_char = out_folder.c_str();
+        const char *out_folder_char = out_folder.c_str();
         const char *job_prefix_char = job_prefix.c_str();
+        std::ostringstream zip_data;
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
-        // vectord2d inter = readInterSixCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution, cell_line_char);
         getInterNum(inter, n_samples_per_run, false, 1);
         // test
         const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
         // const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
+
         clock_t begin, finish;
         double totaltime;
         begin = clock();
 
-        #pragma omp parallel for num_threads(threads)
-        for (int i = 0; i < n_runs; ++i)
-        {
-            my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
-            // std::thread displayThread(insertExampleDataInParallel, std::ref(chains), n_examples, job_prefix_char);
-            // wait for the display thread to finish
-            // std::unique_lock<std::mutex> lock(mtx);
-            // cv.wait(lock, []
-            //         { return isReadyToDisplay; });
+        // create zip file path
+        char out_file[MAX_CHAR];
+        snprintf(out_file, sizeof(out_file), "%s/%s_%s_%u_%u_output.zip", out_folder_char, cell_line_char, job_prefix_char, start, end);
 
-            // display the generated data
-            // std::cout << "display " << n_examples << "3D chromosome data" << std::endl;
-            for (unsigned j = 0; j != n_samples_per_run; j++)
+        int error = 0;
+        zip_t *zip_archive = NULL;
+
+#pragma omp parallel num_threads(threads)
+        {
+// only one thread opens the zip file
+#pragma omp single
             {
-                insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char, cell_line_char);
-                // allDistanceMatrix(chains[j]);
+                zip_archive = zip_open(out_file, ZIP_CREATE | ZIP_EXCL, &error);
+                if (zip_archive == NULL)
+                {
+                    fprintf(stderr, "Error opening zip file for writing: %s\n", out_file);
+                    exit(1);
+                }
+            }
+
+// execute the main loop in parallel
+#pragma omp for
+            for (int i = 0; i < n_runs; ++i)
+            {
+                my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
+
+                if (download && zip_archive != NULL)
+                {
+                    // generate a txt file for each chain and add them to the zip file
+                    for (unsigned j = 0; j != n_samples_per_run; ++j)
+                    {
+                        dumpSingleChainToZip(zip_archive, chains[j], i * n_samples_per_run + j, job_prefix_char, cell_line_char, start, end);
+                    }
+                }
+                else
+                {
+                    // no download, insert the data into the database
+                    for (unsigned j = 0; j != n_samples_per_run; j++)
+                    {
+                        insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char, cell_line_char);
+                    }
+                }
+            }
+
+// close the zip file
+#pragma omp single
+            {
+                if (zip_close(zip_archive) < 0)
+                {
+                    fprintf(stderr, "Error closing zip file\n");
+                    exit(1);
+                }
+                printf("Successfully created zip file: %s\n", out_file);
             }
         }
 
-        // if (download)
-        // {
-        //     // download all chromosome files
-        //     for (int i = 0; i < n_runs; ++i)
-        //     {
-        //         my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
-        //         createZipInMemory(chains, job_prefix);
-        //     }
-        // }
         finish = clock();
         totaltime = (double)(finish - begin) / CLOCKS_PER_SEC;
         std::cout << "Total cost " << totaltime << " seconds!" << endl;
