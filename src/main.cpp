@@ -272,9 +272,11 @@ int main(int argc, char *argv[])
         std::ostringstream zip_data;
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
+        
         // test
-        const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
-        // const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
+        // const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
+        
+        const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
 
         clock_t begin, finish;
         double totaltime;
