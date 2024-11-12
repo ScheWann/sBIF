@@ -29,24 +29,37 @@ char* getOutfile(const char* out_folder, unsigned rep_id, const char* job_prefix
 
 void dumpSingleChainToZip(zip_t *zip_archive, my_chain& chain, unsigned rep_id, const char* job_prefix, const char* cell_line, unsigned start, unsigned end)
 {
-    // generate text for each chain
+    // Generate text for each chain
     char file_name[128];
     snprintf(file_name, sizeof(file_name), "%s.%s.%u.%u.%u.txt", cell_line, job_prefix, start, end, rep_id);
 
-    // write the chain data to a string
+    // Write the chain data to a string
     std::string chain_data;
     char header[128];
     snprintf(header, sizeof(header), "cell_line: %s, job_prefix: %s, rep_id: %u, start:%u, end: %u \n", cell_line, job_prefix, rep_id, start, end);
     chain_data.append(header);
 
-    for (Node node : chain)
+    // Store nodes in a vector for easy reference
+    std::vector<Node> nodes(chain.begin(), chain.end());
+
+    // Append node data and pairwise distance calculations
+    for (size_t i = 0; i < nodes.size(); ++i)
     {
-        char line[128];
-        snprintf(line, sizeof(line), "%f\t%f\t%f\n", node.x, node.y, node.z);
+        char line[1024];
+        chain_data.append("Node ");
+        snprintf(line, sizeof(line), "%zu: (%f, %f, %f)\n", i, nodes[i].x, nodes[i].y, nodes[i].z);
         chain_data.append(line);
+
+        // Calculate distances to all subsequent nodes
+        for (size_t j = i + 1; j < nodes.size(); ++j)
+        {
+            double distance = calculateDistance(nodes[i], nodes[j]);
+            snprintf(line, sizeof(line), "  Distance to node %zu: %f\n", j, distance);
+            chain_data.append(line);
+        }
     }
 
-    // add the chain data to the zip archive
+    // Add the chain data to the zip archive
     zip_source_t *source = zip_source_buffer(zip_archive, chain_data.c_str(), chain_data.size(), 0);
     if (source == NULL)
     {
@@ -62,12 +75,46 @@ void dumpSingleChainToZip(zip_t *zip_archive, my_chain& chain, unsigned rep_id, 
 }
 
 // Euclidean distance calculation function
-double calculateDistance(const Node& node1, const Node& node2) {
+double calculateDistance(const Node node1, const Node node2) {
     return std::sqrt(
         std::pow(node2.x - node1.x, 2) +
         std::pow(node2.y - node1.y, 2) +
         std::pow(node2.z - node1.z, 2)
     );
+}
+
+void generateDistanceFile(my_chain &chain, int chain_index, zip_t *zip_archive, const char *job_prefix_char, const char *cell_line_char, unsigned start, unsigned end) {
+    // 生成距离文件的名称
+    char distance_filename[MAX_CHAR];
+    snprintf(distance_filename, sizeof(distance_filename), "%s_%s_%u_%u_distance_%d.txt", job_prefix_char, cell_line_char, start, end, chain_index);
+    
+    // 使用std::vector来存储生成的内容
+    std::vector<char> distance_content;
+    distance_content.reserve(10000); // 预分配一个较大的空间来容纳文件内容，避免多次重新分配内存
+
+    int n_beads = chain.size();
+    for (int i = 0; i < n_beads; ++i) {
+        for (int j = i + 1; j < n_beads; ++j) { // 计算每对bead的距离
+            double dist = calculateDistance(chain[i], chain[j]);
+
+            // 将每对bead的距离格式化并追加到distance_content中
+            char buffer[256]; // 临时缓冲区来存储单条信息
+            int written = snprintf(buffer, sizeof(buffer), "Distance between bead %d and bead %d: %.3f\n", i, j, dist);
+            distance_content.insert(distance_content.end(), buffer, buffer + written); // 将结果插入到vector中
+        }
+    }
+
+    // 将生成的距离文件内容添加到zip归档中
+    zip_source_t *distance_source = zip_source_buffer(zip_archive, distance_content.data(), distance_content.size(), 0);
+    if (distance_source == NULL) {
+        fprintf(stderr, "Error creating zip source for distance file\n");
+        exit(1);
+    }
+
+    if (zip_file_add(zip_archive, distance_filename, distance_source, ZIP_FL_OVERWRITE) < 0) {
+        fprintf(stderr, "Error adding distance file to zip\n");
+        exit(1);
+    }
 }
 
 // insert into the database
