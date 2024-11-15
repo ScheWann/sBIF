@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <iostream>
 #include <zlib.h>
 #include <zip.h>
@@ -140,8 +141,18 @@ void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, uns
     }
 
     // Prepare the insert query
-    std::string insertQuery = "INSERT INTO position (cell_line, chrID, sampleID, X, Y, Z, start_value, end_value) VALUES ";
+    std::string insertQuery = "INSERT INTO position (cell_line, chrID, sampleID, X, Y, Z, start_value, end_value, insert_time) VALUES ";
     std::vector<std::string> valueSets;
+
+    // Get the current local time
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm* now_tm = std::localtime(&now_c);
+
+    // Format the current time as YYYY-MM-DD HH:MM:SS using strftime
+    char time_buffer[20]; // Buffer to hold formatted time
+    std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", now_tm);
+    std::string insertTime(time_buffer);
 
     for (Node node : chain) {
         char rep_id_str[12], x_str[32], y_str[32], z_str[32];
@@ -155,7 +166,7 @@ void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, uns
                                 std::string(rep_id_str) + ", " +
                                 std::string(x_str) + ", " + std::string(y_str) + ", " +
                                 std::string(z_str) + ", " + std::to_string(start) + ", " +
-                                std::to_string(end) + ")";
+                                std::to_string(end) + ", '" + insertTime + "')";
         valueSets.push_back(valueSet);
     }
 

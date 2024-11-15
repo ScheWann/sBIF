@@ -274,7 +274,7 @@ int main(int argc, char *argv[])
         getInterNum(inter, n_samples_per_run, false, 1);
         
         // test
-        // const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
+        // const char* conninfo = "host=localhost dbname=test user=siyuanzhao";
         
         const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
 
