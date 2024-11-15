@@ -2,6 +2,7 @@
 #include <libpq-fe.h>
 #include <sstream>
 #include <cstdio>
+#include <chrono>
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
