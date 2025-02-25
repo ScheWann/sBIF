@@ -166,9 +166,7 @@ int main(int argc, char *argv[])
 
                 item = item.erase(0, item.find_first_not_of(" \t\n\r"));
                 item = item.erase(item.find_last_not_of(" \t\n\r") + 1);
-
-                std::cout << "Trimmed item value: '" << item << "'" << std::endl; // 输出修剪后的值
-                download = (item == "true" || item == "1");
+                download = (item == "true" || item == "True" || item == "1");
             }
             if ((it->first.compare("o") == 0) || (it->first.compare("out") == 0))
                 out_folder = it->second[0];
@@ -272,35 +270,18 @@ int main(int argc, char *argv[])
         std::ostringstream zip_data;
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
-        
+
         // test
-        // const char* conninfo = "host=localhost dbname=test user=siyuanzhao";
-        
-        const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
+        const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
+
+        // const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
 
         clock_t begin, finish;
         double totaltime;
         begin = clock();
 
-        // create zip file path
-        char out_file[MAX_CHAR];
-        snprintf(out_file, sizeof(out_file), "%s/%s_%s_%u_%u_output.zip", out_folder_char, cell_line_char, job_prefix_char, start, end);
-
-        int error = 0;
-        zip_t *zip_archive = NULL;
-
 #pragma omp parallel num_threads(threads)
         {
-// only one thread opens the zip file
-#pragma omp single
-            {
-                zip_archive = zip_open(out_file, ZIP_CREATE | ZIP_EXCL, &error);
-                if (zip_archive == NULL)
-                {
-                    fprintf(stderr, "Error opening zip file for writing: %s\n", out_file);
-                    exit(1);
-                }
-            }
 
 // execute the main loop in parallel
 #pragma omp for
@@ -308,12 +289,11 @@ int main(int argc, char *argv[])
             {
                 my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
 
-                if (download && zip_archive != NULL)
+                if (download)
                 {
-                    // generate a txt file for each chain and add them to the zip file
-                    for (unsigned j = 0; j != n_samples_per_run; ++j)
+                    for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
-                        dumpSingleChainToZip(zip_archive, chains[j], i * n_samples_per_run + j, job_prefix_char, cell_line_char, start, end);
+                        insertDistanceData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char, cell_line_char);
                     }
                 }
                 else
@@ -323,19 +303,6 @@ int main(int argc, char *argv[])
                     {
                         insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char, cell_line_char);
                     }
-                }
-            }
-
-// close the zip file
-#pragma omp single
-            {
-                if (zip_close(zip_archive) < 0)
-                {
-                    fprintf(stderr, "Error closing zip file\n");
-                    exit(1);
-                }
-                if (download) {
-                    printf("Successfully created zip file: %s\n", out_file);
                 }
             }
         }

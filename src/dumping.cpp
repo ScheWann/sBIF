@@ -29,53 +29,6 @@ char* getOutfile(const char* out_folder, unsigned rep_id, const char* job_prefix
 
 }
 
-void dumpSingleChainToZip(zip_t *zip_archive, my_chain& chain, unsigned rep_id, const char* job_prefix, const char* cell_line, unsigned start, unsigned end)
-{
-    // Generate text for each chain
-    char file_name[128];
-    snprintf(file_name, sizeof(file_name), "%s.%s.%u.%u.%u.txt", cell_line, job_prefix, start, end, rep_id);
-
-    // Write the chain data to a string
-    std::string chain_data;
-    char header[128];
-    snprintf(header, sizeof(header), "cell_line: %s, job_prefix: %s, rep_id: %u, start:%u, end: %u \n", cell_line, job_prefix, rep_id, start, end);
-    chain_data.append(header);
-
-    // Store nodes in a vector for easy reference
-    std::vector<Node> nodes(chain.begin(), chain.end());
-
-    // Append node data and pairwise distance calculations
-    for (size_t i = 0; i < nodes.size(); ++i)
-    {
-        char line[1024];
-        chain_data.append("Node ");
-        snprintf(line, sizeof(line), "%zu: (%f, %f, %f)\n", i, nodes[i].x, nodes[i].y, nodes[i].z);
-        chain_data.append(line);
-
-        // Calculate distances to all subsequent nodes
-        for (size_t j = i + 1; j < nodes.size(); ++j)
-        {
-            double distance = calculateDistance(nodes[i], nodes[j]);
-            snprintf(line, sizeof(line), "  Distance to node %zu: %f\n", j, distance);
-            chain_data.append(line);
-        }
-    }
-
-    // Add the chain data to the zip archive
-    zip_source_t *source = zip_source_buffer(zip_archive, chain_data.c_str(), chain_data.size(), 0);
-    if (source == NULL)
-    {
-        fprintf(stderr, "Error creating zip source for chain %u\n", rep_id);
-        exit(1);
-    }
-
-    if (zip_file_add(zip_archive, file_name, source, ZIP_FL_OVERWRITE) < 0)
-    {
-        fprintf(stderr, "Error adding file to zip archive: %s\n", zip_strerror(zip_archive));
-        exit(1);
-    }
-}
-
 // Euclidean distance calculation function
 double calculateDistance(const Node node1, const Node node2) {
     return std::sqrt(
@@ -129,6 +82,73 @@ std::string join(const std::vector<std::string>& elements, const std::string& de
         }
     }
     return oss.str();
+}
+
+// intert bead pair distance of each sample to the database
+void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
+{
+    // database connection
+    PGconn* conn = PQconnectdb(conninfo);
+    if (PQstatus(conn) != CONNECTION_OK) {
+        std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
+        PQfinish(conn);
+        return;
+    }
+
+    std::string insertQuery = "INSERT INTO distance (cell_line, chrID, sampleID, bead_i, bead_j, distance, insert_time) VALUES ";
+    std::vector<std::string> valueSets;
+
+    // get the current local time
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm* now_tm = std::localtime(&now_c);
+    char time_buffer[20];
+    std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", now_tm);
+    std::string insertTime(time_buffer);
+
+    // all bead pairs
+    int n_beads = chain.size();
+    for (int i = 0; i < n_beads; ++i) {
+        for (int j = i + 1; j < n_beads; ++j) {
+            // distance calculation
+            double dist = calculateDistance(chain[i], chain[j]);
+
+            char dist_str[32], i_str[12], j_str[12];
+            snprintf(dist_str, sizeof(dist_str), "%.3f", dist);
+            snprintf(i_str, sizeof(i_str), "%d", i);
+            snprintf(j_str, sizeof(j_str), "%d", j);
+
+            std::string valueSet = "('" + std::string(cell_line) + "', '" + 
+                                  std::string(job_prefix) + "', " + 
+                                  std::to_string(rep_id) + ", " +
+                                  i_str + ", " + j_str + ", " +
+                                  dist_str + ", '" + insertTime + "')";
+            valueSets.push_back(valueSet);
+        }
+    }
+
+    if (!valueSets.empty()) {
+        std::cout << "Inserting distances for " 
+            << cell_line << ": "
+            << job_prefix << "." << start << "-" << end 
+            << " (" << valueSets.size() << " pairs)..." 
+        << std::endl;
+        insertQuery += join(valueSets, ", ");
+
+        PGresult* res = PQexec(conn, insertQuery.c_str());
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+            std::cerr << "Distance insert failed: " << PQerrorMessage(conn) << std::endl;
+        } else {
+            std::cout << "Inserted distances for " 
+                     << cell_line << ": "
+                     << job_prefix << "." << start << "-" << end 
+                     << " (" << valueSets.size() << " pairs) successfully." 
+                     << std::endl;
+        }
+        PQclear(res);
+    }
+
+    PQfinish(conn);
 }
 
 void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
