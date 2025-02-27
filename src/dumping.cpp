@@ -103,7 +103,7 @@ void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, u
         return;
     }
 
-    std::string insertQuery = "INSERT INTO distance (cell_line, chrID, sampleID, bead_i, bead_j, distance, insert_time) VALUES ";
+    std::string insertQuery = "INSERT INTO distance (cell_line, chrID, sampleID, start_value, end_value, bead_i, bead_j, distance, insert_time) VALUES ";
     std::vector<std::string> valueSets;
 
     // get the current local time
@@ -132,6 +132,8 @@ void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, u
                                    std::string(job_prefix) + "', " +
                                    std::to_string(rep_id) + ", " +
                                    i_str + ", " + j_str + ", " +
+                                   std::to_string(start) + ", " +
+                                   std::to_string(end) + ", " +
                                    dist_str + ", '" + insertTime + "')";
             valueSets.push_back(valueSet);
         }
