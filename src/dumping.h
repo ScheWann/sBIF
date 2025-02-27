@@ -21,6 +21,4 @@ void insertSampleData(const char* conninfo, my_chain& chain, unsigned start, uns
 
 double calculateDistance(const Node node1, const Node node2);
 
-std::vector<std::vector<double>> allDistanceMatrix(const std::vector<Node>& chain);
-
 #endif //SBIF_DUMPING_H

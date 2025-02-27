@@ -292,24 +292,6 @@ void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, uns
     PQfinish(conn);
 }
 
-std::vector<std::vector<double>> allDistanceMatrix(const std::vector<Node> &chain)
-{
-    unsigned numNodes = chain.size();
-    std::vector<std::vector<double>> distanceMatrix(numNodes, std::vector<double>(numNodes, 0.0));
-
-    for (unsigned i = 0; i < numNodes; ++i)
-    {
-        for (unsigned j = i + 1; j < numNodes; ++j)
-        {
-            double distance = calculateDistance(chain[i], chain[j]);
-            distanceMatrix[i][j] = distance;
-            distanceMatrix[j][i] = distance;
-            cout << "Writing distance matrix " << distance << " ..." << endl;
-        }
-    }
-    return distanceMatrix;
-}
-
 void dumpEnsemble(my_ensemble &chains, const char *out_folder, const char *job_prefix)
 {
     auto n_samples = chains.size();
