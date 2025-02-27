@@ -131,9 +131,9 @@ void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, u
             std::string valueSet = "('" + std::string(cell_line) + "', '" +
                                    std::string(job_prefix) + "', " +
                                    std::to_string(rep_id) + ", " +
-                                   i_str + ", " + j_str + ", " +
                                    std::to_string(start) + ", " +
                                    std::to_string(end) + ", " +
+                                   i_str + ", " + j_str + ", " +
                                    dist_str + ", '" + insertTime + "')";
             valueSets.push_back(valueSet);
         }
