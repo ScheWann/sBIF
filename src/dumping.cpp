@@ -92,9 +92,83 @@ std::string join(const std::vector<std::string> &elements, const std::string &de
 }
 
 // intert bead pair distance of each sample to the database
+// void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
+// {
+//     // database connection
+//     PGconn *conn = PQconnectdb(conninfo);
+//     if (PQstatus(conn) != CONNECTION_OK)
+//     {
+//         std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
+//         PQfinish(conn);
+//         return;
+//     }
+
+//     std::string insertQuery = "INSERT INTO distance (cell_line, chrID, sampleID, start_value, end_value, bead_i, bead_j, distance, insert_time) VALUES ";
+//     std::vector<std::string> valueSets;
+
+//     // get the current local time
+//     auto now = std::chrono::system_clock::now();
+//     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+//     std::tm *now_tm = std::localtime(&now_c);
+//     char time_buffer[20];
+//     std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", now_tm);
+//     std::string insertTime(time_buffer);
+
+//     // all bead pairs
+//     int n_beads = chain.size();
+//     for (int i = 0; i < n_beads; ++i)
+//     {
+//         for (int j = i + 1; j < n_beads; ++j)
+//         {
+//             // distance calculation
+//             double dist = calculateDistance(chain[i], chain[j]);
+
+//             char dist_str[32], i_str[12], j_str[12];
+//             snprintf(dist_str, sizeof(dist_str), "%.3f", dist);
+//             snprintf(i_str, sizeof(i_str), "%d", i);
+//             snprintf(j_str, sizeof(j_str), "%d", j);
+
+//             std::string valueSet = "('" + std::string(cell_line) + "', '" +
+//                                    std::string(job_prefix) + "', " +
+//                                    std::to_string(rep_id) + ", " +
+//                                    std::to_string(start) + ", " +
+//                                    std::to_string(end) + ", " +
+//                                    i_str + ", " + j_str + ", " +
+//                                    dist_str + ", '" + insertTime + "')";
+//             valueSets.push_back(valueSet);
+//         }
+//     }
+
+//     if (!valueSets.empty())
+//     {
+//         std::cout << "Inserting distances for "
+//                   << cell_line << ": "
+//                   << job_prefix << "." << start << "-" << end
+//                   << " (" << valueSets.size() << " pairs)..."
+//                   << std::endl;
+//         insertQuery += join(valueSets, ", ");
+
+//         PGresult *res = PQexec(conn, insertQuery.c_str());
+//         if (PQresultStatus(res) != PGRES_COMMAND_OK)
+//         {
+//             std::cerr << "Distance insert failed: " << PQerrorMessage(conn) << std::endl;
+//         }
+//         else
+//         {
+//             std::cout << "Inserted distances for "
+//                       << cell_line << ": "
+//                       << job_prefix << "." << start << "-" << end
+//                       << " (" << valueSets.size() << " pairs) successfully."
+//                       << std::endl;
+//         }
+//         PQclear(res);
+//     }
+
+//     PQfinish(conn);
+// }
+
 void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
 {
-    // database connection
     PGconn *conn = PQconnectdb(conninfo);
     if (PQstatus(conn) != CONNECTION_OK)
     {
@@ -103,67 +177,53 @@ void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, u
         return;
     }
 
-    std::string insertQuery = "INSERT INTO distance (cell_line, chrID, sampleID, start_value, end_value, bead_i, bead_j, distance, insert_time) VALUES ";
-    std::vector<std::string> valueSets;
+    std::string copyQuery = "COPY distance (cell_line, chrID, sampleID, start_value, end_value, bead_i, bead_j, distance, insert_time) FROM STDIN WITH (FORMAT csv)";
+    PGresult *res = PQexec(conn, copyQuery.c_str());
 
-    // get the current local time
+    if (PQresultStatus(res) != PGRES_COPY_IN)
+    {
+        std::cerr << "COPY command failed: " << PQerrorMessage(conn) << std::endl;
+        PQclear(res);
+        PQfinish(conn);
+        return;
+    }
+    PQclear(res);
+
+    std::stringstream copyData;
+    char time_buffer[20];
     auto now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
     std::tm *now_tm = std::localtime(&now_c);
-    char time_buffer[20];
     std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", now_tm);
-    std::string insertTime(time_buffer);
 
-    // all bead pairs
     int n_beads = chain.size();
     for (int i = 0; i < n_beads; ++i)
     {
         for (int j = i + 1; j < n_beads; ++j)
         {
-            // distance calculation
             double dist = calculateDistance(chain[i], chain[j]);
-
-            char dist_str[32], i_str[12], j_str[12];
-            snprintf(dist_str, sizeof(dist_str), "%.3f", dist);
-            snprintf(i_str, sizeof(i_str), "%d", i);
-            snprintf(j_str, sizeof(j_str), "%d", j);
-
-            std::string valueSet = "('" + std::string(cell_line) + "', '" +
-                                   std::string(job_prefix) + "', " +
-                                   std::to_string(rep_id) + ", " +
-                                   std::to_string(start) + ", " +
-                                   std::to_string(end) + ", " +
-                                   i_str + ", " + j_str + ", " +
-                                   dist_str + ", '" + insertTime + "')";
-            valueSets.push_back(valueSet);
+            copyData << cell_line << "," << job_prefix << "," << rep_id << "," << start << "," << end
+                     << "," << i << "," << j << "," << dist << "," << time_buffer << "\n";
         }
     }
 
-    if (!valueSets.empty())
+    if (PQputCopyData(conn, copyData.str().c_str(), copyData.str().size()) != 1)
     {
-        std::cout << "Inserting distances for "
-                  << cell_line << ": "
-                  << job_prefix << "." << start << "-" << end
-                  << " (" << valueSets.size() << " pairs)..."
-                  << std::endl;
-        insertQuery += join(valueSets, ", ");
-
-        PGresult *res = PQexec(conn, insertQuery.c_str());
-        if (PQresultStatus(res) != PGRES_COMMAND_OK)
-        {
-            std::cerr << "Distance insert failed: " << PQerrorMessage(conn) << std::endl;
-        }
-        else
-        {
-            std::cout << "Inserted distances for "
-                      << cell_line << ": "
-                      << job_prefix << "." << start << "-" << end
-                      << " (" << valueSets.size() << " pairs) successfully."
-                      << std::endl;
-        }
-        PQclear(res);
+        std::cerr << "Failed to send data to PostgreSQL: " << PQerrorMessage(conn) << std::endl;
     }
 
+    if (PQputCopyEnd(conn, NULL) != 1)
+    {
+        std::cerr << "Failed to complete COPY command: " << PQerrorMessage(conn) << std::endl;
+    }
+
+    PGresult *endRes = PQgetResult(conn);
+    if (PQresultStatus(endRes) != PGRES_COMMAND_OK)
+    {
+        std::cerr << "COPY failed: " << PQerrorMessage(conn) << std::endl;
+    }
+
+    PQclear(endRes);
     PQfinish(conn);
 }
 
