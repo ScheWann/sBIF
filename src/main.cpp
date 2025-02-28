@@ -13,6 +13,7 @@
 #include <thread>
 #include <atomic>
 
+std::atomic<unsigned> global_sample_id(0);
 int main(int argc, char *argv[])
 {
 
@@ -271,7 +272,7 @@ int main(int argc, char *argv[])
         std::ostringstream zip_data;
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
-        std::atomic<unsigned> global_sample_id(0);
+
         // test
         // const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
 
