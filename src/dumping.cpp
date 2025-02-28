@@ -102,7 +102,7 @@ void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, u
         return;
     }
 
-    std::string copyQuery = "COPY distance (cell_line, chrID, sampleID, start_value, end_value, n_beads, distance_vector, insert_time) FROM STDIN WITH (FORMAT csv)";
+    std::string copyQuery = "COPY distance (cell_line, chrid, sampleid, start_value, end_value, n_beads, distance_vector, insert_time) FROM STDIN WITH (FORMAT csv)";
     PGresult *res = PQexec(conn, copyQuery.c_str());
     if (PQresultStatus(res) != PGRES_COPY_IN)
     {

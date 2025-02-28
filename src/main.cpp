@@ -11,6 +11,7 @@
 #include "help.h"
 #include <sstream>
 #include <thread>
+#include <atomic>
 
 int main(int argc, char *argv[])
 {
@@ -270,7 +271,7 @@ int main(int argc, char *argv[])
         std::ostringstream zip_data;
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
-
+        std::atomic<unsigned> global_sample_id(0);
         // test
         // const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
 
@@ -293,7 +294,8 @@ int main(int argc, char *argv[])
                 {
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
-                        insertDistanceData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char, cell_line_char);
+                        unsigned rep_id = global_sample_id.fetch_add(1);
+                        insertDistanceData(conninfo, chains[j], start, end, rep_id, job_prefix_char, cell_line_char);
                     }
                 }
                 else
