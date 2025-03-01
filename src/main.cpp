@@ -295,7 +295,7 @@ int main(int argc, char *argv[])
                 {
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
-                        unsigned rep_id = global_sample_id.fetch_add(1);
+                        unsigned rep_id = global_sample_id.fetch_add(1, std::memory_order_relaxed);
                         insertDistanceData(conninfo, chains[j], start, end, rep_id, job_prefix_char, cell_line_char);
                     }
                 }
