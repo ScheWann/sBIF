@@ -276,17 +276,20 @@ int main(int argc, char *argv[])
         // test
         // const char *conninfo = "host=localhost dbname=test user=siyuanzhao";
 
-        const char* conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
+        const char *conninfo = "host=db port=5432 dbname=chromosome_db user=admin password=chromosome";
 
         clock_t begin, finish;
         double totaltime;
         begin = clock();
 
-#pragma omp parallel num_threads(threads)
+        #pragma omp parallel num_threads(threads)
         {
+            char local_job_prefix[64];
+            char local_cell_line[64];
+            strncpy(local_job_prefix, job_prefix_char, sizeof(local_job_prefix));
+            strncpy(local_cell_line, cell_line_char, sizeof(local_cell_line));
 
-// execute the main loop in parallel
-#pragma omp for
+            #pragma omp for schedule(static, 1)
             for (int i = 0; i < n_runs; ++i)
             {
                 my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
@@ -296,7 +299,7 @@ int main(int argc, char *argv[])
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
                         unsigned rep_id = global_sample_id.fetch_add(1, std::memory_order_relaxed);
-                        insertDistanceData(conninfo, chains[j], start, end, rep_id, job_prefix_char, cell_line_char);
+                        insertDistanceData(conninfo, chains[j], start, end, rep_id, local_job_prefix, local_cell_line);
                     }
                 }
                 else
@@ -304,7 +307,7 @@ int main(int argc, char *argv[])
                     // no download, insert the data into the database
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
-                        insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, job_prefix_char, cell_line_char);
+                        insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
                     }
                 }
             }
