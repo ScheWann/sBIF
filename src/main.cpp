@@ -294,22 +294,23 @@ int main(int argc, char *argv[])
             {
                 my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
 
-                if (download)
-                {
-                    for (unsigned j = 0; j != n_samples_per_run; j++)
-                    {
-                        unsigned rep_id = global_sample_id.fetch_add(1, std::memory_order_relaxed);
-                        insertDistanceData(conninfo, chains[j], start, end, rep_id, local_job_prefix, local_cell_line);
-                    }
-                }
-                else
-                {
+                // if (download)
+                // {
+                //     for (unsigned j = 0; j != n_samples_per_run; j++)
+                //     {
+                //         unsigned rep_id = global_sample_id.fetch_add(1, std::memory_order_relaxed);
+                //         insertDistanceData(conninfo, chains[j], start, end, rep_id, local_job_prefix, local_cell_line);
+                //     }
+                // }
+                // else
+                // {
                     // no download, insert the data into the database
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
                         insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
+                        insertDistanceData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
                     }
-                }
+                // }
             }
         }
 
