@@ -44,7 +44,6 @@ int main(int argc, char *argv[])
     pa.AddArgType("o", "out", ParsingArgs::MAYBE);
     pa.AddArgType("r", "res", ParsingArgs::MAYBE);
     // pa.AddArgType("ex", "example", ParsingArgs::MAYBE);
-    pa.AddArgType("do", "download", ParsingArgs::MAYBE);
     pa.AddArgType("d", "fibdens", ParsingArgs::MAYBE);
     pa.AddArgType("ns", "nsamp", ParsingArgs::MAYBE);
     pa.AddArgType("nr", "nruns", ParsingArgs::MAYBE);
@@ -79,7 +78,6 @@ int main(int argc, char *argv[])
         double fiber_density = 0.2368;
         unsigned n_samples = 50000;
         // unsigned n_examples = 5;
-        bool download = false;
         unsigned n_samples_per_run = 100;
         unsigned n_sphere = 50;
         unsigned ki_dist = 80;
@@ -162,14 +160,6 @@ int main(int argc, char *argv[])
             //     item << it->second[0];
             //     item >> n_examples;
             // }
-            if ((it->first == "do") || (it->first == "download"))
-            {
-                std::string item = it->second[0];
-
-                item = item.erase(0, item.find_first_not_of(" \t\n\r"));
-                item = item.erase(item.find_last_not_of(" \t\n\r") + 1);
-                download = (item == "true" || item == "True" || item == "1");
-            }
             if ((it->first.compare("o") == 0) || (it->first.compare("out") == 0))
                 out_folder = it->second[0];
             if ((it->first.compare("r") == 0) || (it->first.compare("res") == 0))
@@ -245,7 +235,6 @@ int main(int argc, char *argv[])
         std::cout << "Start position:" << start << endl;
         std::cout << "End position :" << end << endl;
         std::cout << "Cell line :" << cell_line << endl;
-        std::cout << "Download :" << download << endl;
         std::cout << "Output folder :" << out_folder << endl;
         // std::cout << "Examples showing :" << n_examples << endl;
         std::cout << "Resolution :" << resolution << endl;
