@@ -13,7 +13,8 @@
 #include <thread>
 #include <atomic>
 
-std::atomic<unsigned> global_sample_id(0);
+std::atomic<unsigned> global_sample_index(0);
+static std::vector<std::pair<unsigned, std::vector<float>>> all_distances;
 int main(int argc, char *argv[])
 {
 
@@ -258,7 +259,8 @@ int main(int argc, char *argv[])
         const char *cell_line_char = cell_line.c_str();
         const char *out_folder_char = out_folder.c_str();
         const char *job_prefix_char = job_prefix.c_str();
-        std::ostringstream zip_data;
+
+        all_distances.resize(n_samples);
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
 
@@ -273,6 +275,7 @@ int main(int argc, char *argv[])
 
         #pragma omp parallel num_threads(threads)
         {
+            std::vector<float> local_dist;
             char local_job_prefix[64];
             char local_cell_line[64];
             strncpy(local_job_prefix, job_prefix_char, sizeof(local_job_prefix));
@@ -285,10 +288,36 @@ int main(int argc, char *argv[])
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
                         insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
-                        insertDistanceData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
+                        // insertDistanceData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
+                        local_dist = computeDistanceVector(chains[j]);
+                        unsigned idx = global_sample_index.fetch_add(1);
+                        if (idx < n_samples)
+                        {
+                            all_distances[idx].first = static_cast<unsigned>(i * n_samples_per_run + j);
+                            all_distances[idx].second = std::move(local_dist);
+                        }
                     }
             }
         }
+
+        // insert all distances into the database
+        for (unsigned idx = 0; idx < n_samples; ++idx) 
+        {
+            unsigned rep_id = all_distances[idx].first;
+            const std::vector<float> &dist_vec = all_distances[idx].second;
+            insertDistanceDataFromVector(conninfo, cell_line_char, job_prefix_char, rep_id, start, end, dist_vec);
+        }
+
+        std::vector<float> avg_vector = computeAvgVector(all_distances);
+        std::vector<float> freq_condensed = computeFreqCondensed(all_distances, 80.0f);
+        std::vector<float> freq_full = squareformFullMatrix(freq_condensed);
+
+        // Insert average vector and frequency data into the database
+        insertCalcDistance(conninfo, cell_line_char, job_prefix_char, start, end, avg_vector, freq_full);
+
+        // Clear the all_distances vector
+        all_distances.clear();
+        std::vector<std::pair<unsigned, std::vector<float>>>().swap(all_distances);
 
         finish = clock();
         totaltime = (double)(finish - begin) / CLOCKS_PER_SEC;

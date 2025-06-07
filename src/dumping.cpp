@@ -52,123 +52,42 @@ std::string join(const std::vector<std::string> &elements, const std::string &de
     return oss.str();
 }
 
-// intert bead pair distance of each sample to the database
-// void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
-// {
-//     PGconn *conn = PQconnectdb(conninfo);
-//     if (PQstatus(conn) != CONNECTION_OK)
-//     {
-//         std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
-//         PQfinish(conn);
-//         return;
-//     }
+std::vector<float> computeDistanceVector(const my_chain &chain) {
+    int n_beads = static_cast<int>(chain.size());
+    size_t num_vals = static_cast<size_t>(n_beads) * (n_beads - 1) / 2;
+    std::vector<float> distances;
+    distances.reserve(num_vals);
 
-//     std::string copyQuery = "COPY distance (cell_line, chrid, sampleid, start_value, end_value, n_beads, distance_vector, insert_time) FROM STDIN WITH (FORMAT csv)";
-//     PGresult *res = PQexec(conn, copyQuery.c_str());
-//     if (PQresultStatus(res) != PGRES_COPY_IN)
-//     {
-//         std::cerr << "COPY command failed: " << PQerrorMessage(conn) << std::endl;
-//         PQclear(res);
-//         PQfinish(conn);
-//         return;
-//     }
-//     PQclear(res);
+    for (int i = 0; i < n_beads; ++i) {
+        for (int j = i + 1; j < n_beads; ++j) {
+            double d = calculateDistance(chain[i], chain[j]);
+            distances.push_back(static_cast<float>(d));
+        }
+    }
+    return distances;
+}
 
-//     std::stringstream copyData;
-
-//     // time stamp
-//     char time_buffer[20];
-//     auto now = std::chrono::system_clock::now();
-//     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-//     std::tm *now_tm = std::localtime(&now_c);
-//     std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", now_tm);
-
-//     int n_beads = chain.size();
-
-//     // top triangle distance: vector<double>
-//     std::vector<double> distances;
-//     distances.reserve(n_beads * (n_beads - 1) / 2);
-//     for (int i = 0; i < n_beads; ++i)
-//     {
-//         for (int j = i + 1; j < n_beads; ++j)
-//         {
-//             double d = calculateDistance(chain[i], chain[j]);
-//             distances.push_back(d);
-//         }
-//     }
-
-//     // like: {1.0,2.0,3.0,...}
-//     std::stringstream arrStream;
-//     arrStream << "{";
-//     for (size_t i = 0; i < distances.size(); ++i)
-//     {
-//         arrStream << distances[i];
-//         if (i != distances.size() - 1)
-//             arrStream << ",";
-//     }
-//     arrStream << "}";
-//     std::string arrStr = arrStream.str();
-
-//     copyData << cell_line << ","              // cell_line
-//              << job_prefix << ","             // chrID
-//              << rep_id << ","                 // sampleID
-//              << start << ","                  // start_value
-//              << end << ","                    // end_value
-//              << n_beads << ","                // n_beads
-//              << "\"" << arrStr << "\","       // distance_vector
-//              << time_buffer                   // insert_time
-//              << "\n";
-
-//     std::string copyDataStr = copyData.str();
-//     if (PQputCopyData(conn, copyDataStr.c_str(), copyDataStr.size()) != 1)
-//     {
-//         std::cerr << "Failed to send data to PostgreSQL: " << PQerrorMessage(conn) << std::endl;
-//     }
-
-//     if (PQputCopyEnd(conn, NULL) != 1)
-//     {
-//         std::cerr << "Failed to complete COPY command: " << PQerrorMessage(conn) << std::endl;
-//     }
-
-//     PGresult *endRes = PQgetResult(conn);
-//     if (PQresultStatus(endRes) != PGRES_COMMAND_OK)
-//     {
-//         std::cerr << "COPY failed: " << PQerrorMessage(conn) << std::endl;
-//     }
-
-//     PQclear(endRes);
-//     PQfinish(conn);
-// }
-
-void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
+void insertDistanceDataFromVector(const char *conninfo, const char *cell_line, const char *chrid, unsigned rep_id, unsigned start, unsigned end, const std::vector<float> &distances_f)
 {
     PGconn *conn = PQconnectdb(conninfo);
     if (PQstatus(conn) != CONNECTION_OK) {
-        std::cerr << "Connection failed: " << PQerrorMessage(conn) << std::endl;
+        std::cerr << "connected databse failed " << PQerrorMessage(conn) << std::endl;
         PQfinish(conn);
         return;
     }
 
-    int n_beads = static_cast<int>(chain.size());
-    size_t num_vals = size_t(n_beads) * (n_beads - 1) / 2;
-    std::vector<float> distances_f;
-    distances_f.reserve(num_vals);
-    for (int i = 0; i < n_beads; ++i) {
-        for (int j = i + 1; j < n_beads; ++j) {
-            double d = calculateDistance(chain[i], chain[j]);
-            distances_f.push_back(static_cast<float>(d));
-        }
-    }
+    int n_beads = static_cast<int>((1 + std::sqrt(1 + 8.0 * distances_f.size())) / 2); 
     size_t bin_len = distances_f.size() * sizeof(float);
     std::string binBuf;
     binBuf.resize(bin_len);
     std::memcpy(&binBuf[0], distances_f.data(), bin_len);
 
-    std::string str_sampleid    = std::to_string(rep_id);
-    std::string str_start_value = std::to_string(start);
-    std::string str_end_value   = std::to_string(end);
-    std::string str_n_beads     = std::to_string(n_beads);
+    std::string str_rep     = std::to_string(rep_id);
+    std::string str_start   = std::to_string(start);
+    std::string str_end     = std::to_string(end);
+    std::string str_n_beads = std::to_string(n_beads);
 
+    // time stamp
     char time_buffer[20];
     {
         auto now = std::chrono::system_clock::now();
@@ -180,55 +99,54 @@ void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, u
 
     const int nParams = 8;
     const char *paramValues[nParams];
-    int         paramLengths[nParams];
-    int         paramFormats[nParams];
+    int paramLengths[nParams];
+    int paramFormats[nParams];
 
-    // (1) cell_line
+    // cell_line
     paramValues[0]  = cell_line;
-    paramLengths[0] = std::strlen(cell_line);
+    paramLengths[0] = static_cast<int>(std::strlen(cell_line));
     paramFormats[0] = 0;
 
-    // (2) chrid
-    paramValues[1]  = job_prefix;
-    paramLengths[1] = std::strlen(job_prefix);
+    // chrid
+    paramValues[1]  = chrid;
+    paramLengths[1] = static_cast<int>(std::strlen(chrid));
     paramFormats[1] = 0;
 
-    // (3) sampleid
-    paramValues[2]  = str_sampleid.c_str();
-    paramLengths[2] = static_cast<int>(str_sampleid.size());
+    // sampleid
+    paramValues[2]  = str_rep.c_str();
+    paramLengths[2] = static_cast<int>(str_rep.size());
     paramFormats[2] = 0;
 
-    // (4) start_value
-    paramValues[3]  = str_start_value.c_str();
-    paramLengths[3] = static_cast<int>(str_start_value.size());
+    // start_value
+    paramValues[3]  = str_start.c_str();
+    paramLengths[3] = static_cast<int>(str_start.size());
     paramFormats[3] = 0;
 
-    // (5) end_value
-    paramValues[4]  = str_end_value.c_str();
-    paramLengths[4] = static_cast<int>(str_end_value.size());
+    // end_value
+    paramValues[4]  = str_end.c_str();
+    paramLengths[4] = static_cast<int>(str_end.size());
     paramFormats[4] = 0;
 
-    // (6) n_beads
+    // n_beads
     paramValues[5]  = str_n_beads.c_str();
     paramLengths[5] = static_cast<int>(str_n_beads.size());
     paramFormats[5] = 0;
 
-    // (7) distance_vector
+    // distance_vector
     paramValues[6]  = binBuf.data();
     paramLengths[6] = static_cast<int>(bin_len);
     paramFormats[6] = 1;
 
-    // (8) insert_time
+    // insert_time
     paramValues[7]  = str_time.c_str();
     paramLengths[7] = static_cast<int>(str_time.size());
     paramFormats[7] = 0;
 
-    // 6. 执行 INSERT
     PGresult *res = PQexecParams(conn,
         "INSERT INTO distance("
-          "cell_line, chrid, sampleid, start_value, end_value, n_beads, distance_vector, insert_time"
+            "cell_line, chrid, sampleid, start_value, end_value, n_beads, distance_vector, insert_time"
         ") VALUES("
-          "$1,        $2,    $3,        $4,           $5,       $6,      $7,             $8"
+            "$1, $2, $3, $4, $5, $6, $7, $8"
         ");",
         nParams,
         nullptr,
@@ -239,12 +157,264 @@ void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, u
     );
 
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        std::cerr << "INSERT 失败: " << PQerrorMessage(conn) << std::endl;
+        std::cerr << "insert distance failed: " << PQerrorMessage(conn) << std::endl;
     }
     PQclear(res);
-
     PQfinish(conn);
 }
+
+// Compute the average distance vector from all distances collected
+std::vector<float> computeAvgVector(const std::vector<std::pair<unsigned, std::vector<float>>> &all_distances)
+{
+    size_t n_samples = all_distances.size();
+    if (n_samples == 0) return {};
+
+    size_t L = all_distances[0].second.size();
+    std::vector<double> sum_vec(L, 0.0);
+
+    for (const auto &p : all_distances) {
+        const std::vector<float> &dist = p.second;
+        for (size_t i = 0; i < L; ++i) {
+            sum_vec[i] += static_cast<double>(dist[i]);
+        }
+    }
+    std::vector<float> avg_vec(L);
+    for (size_t i = 0; i < L; ++i) {
+        avg_vec[i] = static_cast<float>(sum_vec[i] / static_cast<double>(n_samples));
+    }
+    return avg_vec;
+}
+
+// Compute the fq condensed vector
+std::vector<float> computeFreqCondensed(const std::vector<std::pair<unsigned, std::vector<float>>> &all_distances, float threshold)
+{
+    size_t n_samples = all_distances.size();
+    if (n_samples == 0) return {};
+
+    size_t L = all_distances[0].second.size();
+    std::vector<int> count_leq(L, 0);
+
+    for (const auto &p : all_distances) {
+        const std::vector<float> &dist = p.second;
+        for (size_t i = 0; i < L; ++i) {
+            if (dist[i] <= threshold) {
+                count_leq[i] += 1;
+            }
+        }
+    }
+    std::vector<float> freq_cond(L);
+    for (size_t i = 0; i < L; ++i) {
+        freq_cond[i] = static_cast<float>(count_leq[i]) / static_cast<float>(n_samples);
+    }
+    return freq_cond;
+}
+
+std::vector<float> squareformFullMatrix(const std::vector<float> &condensed)
+{
+    size_t L = condensed.size();
+    size_t n_beads = static_cast<size_t>((1 + std::sqrt(1 + 8.0 * static_cast<double>(L))) / 2.0);
+
+    std::vector<float> full_mat(n_beads * n_beads, 0.0f);
+    for (size_t i = 0; i < n_beads; ++i) {
+        for (size_t j = i + 1; j < n_beads; ++j) {
+            size_t idx = i * n_beads - (i * (i + 1) / 2) + (j - i - 1);
+            float v = condensed[idx];
+            full_mat[i * n_beads + j] = v;
+            full_mat[j * n_beads + i] = v;
+        }
+    }
+    return full_mat;
+}
+
+
+void insertCalcDistance(const char *conninfo, const char *cell_line, const char *chrid, unsigned start, unsigned end, const std::vector<float> &avg_vec, const std::vector<float> &fq_full)
+{
+    PGconn *conn = PQconnectdb(conninfo);
+    if (PQstatus(conn) != CONNECTION_OK) {
+        std::cerr << "connect calc_distance failed: " << PQerrorMessage(conn) << std::endl;
+        PQfinish(conn);
+        return;
+    }
+
+    const int nParams = 6;
+    const char *paramValues[nParams];
+    int paramLengths[nParams];
+    int paramFormats[nParams];
+
+    char time_buffer[20];
+    {
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        std::tm *now_tm = std::localtime(&now_c);
+        std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", now_tm);
+    }
+
+    // (1) cell_line
+    paramValues[0]  = cell_line;
+    paramLengths[0] = static_cast<int>(std::strlen(cell_line));
+    paramFormats[0] = 0;
+
+    // (2) chrid
+    paramValues[1]  = chrid;
+    paramLengths[1] = static_cast<int>(std::strlen(chrid));
+    paramFormats[1] = 0;
+
+    // (3) start
+    std::string str_start = std::to_string(start);
+    paramValues[2]  = str_start.c_str();
+    paramLengths[2] = static_cast<int>(str_start.size());
+    paramFormats[2] = 0;
+
+    // (4) end
+    std::string str_end = std::to_string(end);
+    paramValues[3]  = str_end.c_str();
+    paramLengths[3] = static_cast<int>(str_end.size());
+    paramFormats[3] = 0;
+
+    // (5) avg_vec
+    size_t avg_len = avg_vec.size() * sizeof(float);
+    std::string avgBuf;
+    avgBuf.resize(avg_len);
+    std::memcpy(&avgBuf[0], avg_vec.data(), avg_len);
+    paramValues[4]  = avgBuf.data();
+    paramLengths[4] = static_cast<int>(avg_len);
+    paramFormats[4] = 1;
+
+    // (6) fq_full
+    size_t fq_len = fq_full.size() * sizeof(float);
+    std::string fqBuf;
+    fqBuf.resize(fq_len);
+    std::memcpy(&fqBuf[0], fq_full.data(), fq_len);
+    paramValues[5]  = fqBuf.data();
+    paramLengths[5] = static_cast<int>(fq_len);
+    paramFormats[5] = 1;
+
+    PGresult *res = PQexecParams(conn,
+        "INSERT INTO calc_distance ("
+            "cell_line, chrid, start_value, end_value, avg_distance_vector, fq_distance_vector"
+        ") VALUES ("
+            "$1, $2, $3, $4, $5, $6"
+        ");",
+        nParams,
+        nullptr,
+        paramValues,
+        paramLengths,
+        paramFormats,
+        0
+    );
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        std::cerr << "insert calc_distance failed: " << PQerrorMessage(conn) << std::endl;
+    }
+
+    PQclear(res);
+    PQfinish(conn);
+}
+
+// void insertDistanceData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
+// {
+//     PGconn *conn = PQconnectdb(conninfo);
+//     if (PQstatus(conn) != CONNECTION_OK) {
+//         std::cerr << "Connection failed: " << PQerrorMessage(conn) << std::endl;
+//         PQfinish(conn);
+//         return;
+//     }
+
+//     int n_beads = static_cast<int>(chain.size());
+//     size_t num_vals = size_t(n_beads) * (n_beads - 1) / 2;
+//     std::vector<float> distances_f;
+//     distances_f.reserve(num_vals);
+//     for (int i = 0; i < n_beads; ++i) {
+//         for (int j = i + 1; j < n_beads; ++j) {
+//             double d = calculateDistance(chain[i], chain[j]);
+//             distances_f.push_back(static_cast<float>(d));
+//         }
+//     }
+//     size_t bin_len = distances_f.size() * sizeof(float);
+//     std::string binBuf;
+//     binBuf.resize(bin_len);
+//     std::memcpy(&binBuf[0], distances_f.data(), bin_len);
+
+//     std::string str_sampleid    = std::to_string(rep_id);
+//     std::string str_start_value = std::to_string(start);
+//     std::string str_end_value   = std::to_string(end);
+//     std::string str_n_beads     = std::to_string(n_beads);
+
+//     char time_buffer[20];
+//     {
+//         auto now = std::chrono::system_clock::now();
+//         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+//         std::tm *now_tm = std::localtime(&now_c);
+//         std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", now_tm);
+//     }
+//     std::string str_time = time_buffer;
+
+//     const int nParams = 8;
+//     const char *paramValues[nParams];
+//     int         paramLengths[nParams];
+//     int         paramFormats[nParams];
+
+//     // (1) cell_line
+//     paramValues[0]  = cell_line;
+//     paramLengths[0] = std::strlen(cell_line);
+//     paramFormats[0] = 0;
+
+//     // (2) chrid
+//     paramValues[1]  = job_prefix;
+//     paramLengths[1] = std::strlen(job_prefix);
+//     paramFormats[1] = 0;
+
+//     // (3) sampleid
+//     paramValues[2]  = str_sampleid.c_str();
+//     paramLengths[2] = static_cast<int>(str_sampleid.size());
+//     paramFormats[2] = 0;
+
+//     // (4) start_value
+//     paramValues[3]  = str_start_value.c_str();
+//     paramLengths[3] = static_cast<int>(str_start_value.size());
+//     paramFormats[3] = 0;
+
+//     // (5) end_value
+//     paramValues[4]  = str_end_value.c_str();
+//     paramLengths[4] = static_cast<int>(str_end_value.size());
+//     paramFormats[4] = 0;
+
+//     // (6) n_beads
+//     paramValues[5]  = str_n_beads.c_str();
+//     paramLengths[5] = static_cast<int>(str_n_beads.size());
+//     paramFormats[5] = 0;
+
+//     // (7) distance_vector
+//     paramValues[6]  = binBuf.data();
+//     paramLengths[6] = static_cast<int>(bin_len);
+//     paramFormats[6] = 1;
+
+//     // (8) insert_time
+//     paramValues[7]  = str_time.c_str();
+//     paramLengths[7] = static_cast<int>(str_time.size());
+//     paramFormats[7] = 0;
+
+//     PGresult *res = PQexecParams(conn,
+//         "INSERT INTO distance("
+//           "cell_line, chrid, sampleid, start_value, end_value, n_beads, distance_vector, insert_time"
+//         ") VALUES("
+//           "$1,        $2,    $3,        $4,           $5,       $6,      $7,             $8"
+//         ");",
+//         nParams,
+//         nullptr,
+//         paramValues,
+//         paramLengths,
+//         paramFormats,
+//         0
+//     );
+
+//     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+//         std::cerr << "INSERT failed: " << PQerrorMessage(conn) << std::endl;
+//     }
+//     PQclear(res);
+
+//     PQfinish(conn);
+// }
 
 void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
 {
