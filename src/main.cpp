@@ -311,9 +311,10 @@ int main(int argc, char *argv[])
         std::vector<float> avg_vector = computeAvgVector(all_distances);
         std::vector<float> freq_condensed = computeFreqCondensed(all_distances, 80.0f);
         std::vector<float> freq_full = squareformFullMatrix(freq_condensed);
+        std::vector<float> best_vec = computeBestVector(all_distances, avg_vector);
 
         // Insert average vector and frequency data into the database
-        insertCalcDistance(conninfo, cell_line_char, job_prefix_char, start, end, avg_vector, freq_full);
+        insertCalcDistance(conninfo, cell_line_char, job_prefix_char, start, end, avg_vector, freq_full, best_vec);
 
         // Clear the all_distances vector
         all_distances.clear();

@@ -25,7 +25,9 @@ std::vector<float> computeFreqCondensed(const std::vector<std::pair<unsigned, st
 
 std::vector<float> squareformFullMatrix(const std::vector<float> &condensed);
 
-void insertCalcDistance(const char *conninfo, const char *cell_line, const char *chrid, unsigned start, unsigned end, const std::vector<float> &avg_vec, const std::vector<float> &fq_full);
+std::vector<float> computeBestVector(const std::vector<std::pair<unsigned,std::vector<float>>>& all_distances, const std::vector<float>& avg_vec);
+
+void insertCalcDistance(const char *conninfo, const char *cell_line, const char *chrid, unsigned start, unsigned end, const std::vector<float> &avg_vec, const std::vector<float> &fq_full, const std::vector<float> &best_vec);
 
 void dumpEnsemble(my_ensemble& chains, const char* out_folder, const char* job_prefix);
 

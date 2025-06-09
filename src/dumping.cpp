@@ -9,6 +9,8 @@
 #include <zlib.h>
 #include <zip.h>
 #include <filesystem>
+#include <numeric>
+#include <cmath>
 
 char *getOutfile(const char *out_folder, unsigned rep_id, const char *job_prefix)
 {
@@ -226,8 +228,47 @@ std::vector<float> squareformFullMatrix(const std::vector<float> &condensed)
     return full_mat;
 }
 
+std::vector<float> computeBestVector(
+    const std::vector<std::pair<unsigned,std::vector<float>>>& all_distances,
+    const std::vector<float>& avg_vec)
+{
+    size_t n = all_distances.size(), L = avg_vec.size();
+    // center the average vector
+    double avg_mean = std::accumulate(avg_vec.begin(), avg_vec.end(), 0.0) / L;
+    std::vector<double> avg_centered(L);
+    for (size_t i = 0; i < L; ++i)
+        avg_centered[i] = avg_vec[i] - avg_mean;
+    double avg_norm_sq = std::accumulate(
+        avg_centered.begin(), avg_centered.end(), 0.0,
+        [](double s, double v){ return s + v*v; });
+    double avg_norm = std::sqrt(avg_norm_sq);
 
-void insertCalcDistance(const char *conninfo, const char *cell_line, const char *chrid, unsigned start, unsigned end, const std::vector<float> &avg_vec, const std::vector<float> &fq_full)
+    // calculate the best correlation
+    size_t best_idx = 0;
+    double best_corr = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        auto &vec = all_distances[i].second;
+        double mean_i = std::accumulate(vec.begin(), vec.end(), 0.0) / L;
+
+        double numer = 0, norm_i_sq = 0;
+        for (size_t j = 0; j < L; ++j) {
+            double x_cent = vec[j] - mean_i;
+            numer    += x_cent * avg_centered[j];
+            norm_i_sq += x_cent * x_cent;
+        }
+        double norm_i = std::sqrt(norm_i_sq);
+        double corr = (norm_i * avg_norm == 0.0)
+                      ? 0.0
+                      : numer / (norm_i * avg_norm);
+        if (std::abs(corr) > std::abs(best_corr)) {
+            best_corr = corr;
+            best_idx  = i;
+        }
+    }
+    return all_distances[best_idx].second;
+}
+
+void insertCalcDistance(const char *conninfo, const char *cell_line, const char *chrid, unsigned start, unsigned end, const std::vector<float> &avg_vec, const std::vector<float> &fq_full, const std::vector<float> &best_vec)
 {
     PGconn *conn = PQconnectdb(conninfo);
     if (PQstatus(conn) != CONNECTION_OK) {
@@ -236,7 +277,7 @@ void insertCalcDistance(const char *conninfo, const char *cell_line, const char 
         return;
     }
 
-    const int nParams = 6;
+    const int nParams = 7;
     const char *paramValues[nParams];
     int paramLengths[nParams];
     int paramFormats[nParams];
@@ -289,11 +330,20 @@ void insertCalcDistance(const char *conninfo, const char *cell_line, const char 
     paramLengths[5] = static_cast<int>(fq_len);
     paramFormats[5] = 1;
 
+    // (7) best_vec
+    size_t best_len = best_vec.size() * sizeof(float);
+    std::string bestBuf;
+    bestBuf.resize(best_len);
+    std::memcpy(&bestBuf[0], best_vec.data(), best_len);
+    paramValues[6]  = bestBuf.data();
+    paramLengths[6] = static_cast<int>(best_len);
+    paramFormats[6] = 1;
+
     PGresult *res = PQexecParams(conn,
         "INSERT INTO calc_distance ("
-            "cell_line, chrid, start_value, end_value, avg_distance_vector, fq_distance_vector"
+            "cell_line, chrid, start_value, end_value, avg_distance_vector, fq_distance_vector, best_vector"
         ") VALUES ("
-            "$1, $2, $3, $4, $5, $6"
+            "$1, $2, $3, $4, $5, $6, $7"
         ");",
         nParams,
         nullptr,
