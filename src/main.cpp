@@ -303,7 +303,7 @@ int main(int argc, char *argv[])
         }
         auto t_position_end = std::chrono::high_resolution_clock::now();
         double dur_position = std::chrono::duration<double>(t_position_end - t_position_start).count();
-        std::cout << "All samples' position data with " << dur_position << " seconds." << std::endl;
+        std::cout << "[position data inserted DONE] All samples' position data with " << dur_position << " seconds." << std::endl;
 
         auto t_insert_start = std::chrono::high_resolution_clock::now();
         // insert all distances into the database
@@ -315,38 +315,38 @@ int main(int argc, char *argv[])
         }
         auto t_insert_end = std::chrono::high_resolution_clock::now();
         double dur_insert = std::chrono::duration<double>(t_insert_end - t_insert_start).count();
-        std::cout << "Inserted all distances into the database in " << dur_insert << " seconds." << std::endl;
+        std::cout << "[distance data inserted DONE] Inserted all distances into the database in " << dur_insert << " seconds." << std::endl;
 
         auto t_avg_start = std::chrono::high_resolution_clock::now();
         std::vector<float> avg_vector = computeAvgVector(all_distances);
         auto t_avg_end = std::chrono::high_resolution_clock::now();
         double dur_avg = std::chrono::duration<double>(t_avg_end - t_avg_start).count();
-        std::cout << "Computed average vector in " << dur_avg << " seconds." << std::endl;
+        std::cout << "[average vector computed DONE] Computed average vector in " << dur_avg << " seconds." << std::endl;
 
         auto t_freqc_start = std::chrono::high_resolution_clock::now();
         std::vector<float> freq_condensed = computeFreqCondensed(all_distances, 80.0f);
         auto t_freqc_end = std::chrono::high_resolution_clock::now();
         double dur_freqc = std::chrono::duration<double>(t_freqc_end - t_freqc_start).count();
-        std::cout << "Computed frequency condensed vector in " << dur_freqc << " seconds." << std::endl;
+        std::cout << "[fq vector computed DONE]Computed frequency condensed vector in " << dur_freqc << " seconds." << std::endl;
 
         auto t_full_start = std::chrono::high_resolution_clock::now();
         std::vector<float> freq_full = squareformFullMatrix(freq_condensed);
         auto t_full_end = std::chrono::high_resolution_clock::now();
         double dur_full = std::chrono::duration<double>(t_full_end - t_full_start).count();
-        std::cout << "Converted frequency condensed vector to full matrix in " << dur_full << " seconds." << std::endl;
+        std::cout << "[fq vector converted DONE]Converted frequency condensed vector to full matrix in " << dur_full << " seconds." << std::endl;
 
         auto t_best_start = std::chrono::high_resolution_clock::now();
         std::vector<float> best_vec = computeBestVector(all_distances, avg_vector);
         auto t_best_end = std::chrono::high_resolution_clock::now();
         double dur_best = std::chrono::duration<double>(t_best_end - t_best_start).count();
-        std::cout << "Computed best vector in " << dur_best << " seconds." << std::endl;
+        std::cout << "[best vector computed DONE]Computed best vector in " << dur_best << " seconds." << std::endl;
 
         // Insert average vector and frequency data into the database
         auto t_insert_calc_start = std::chrono::high_resolution_clock::now();
         insertCalcDistance(conninfo, cell_line_char, job_prefix_char, start, end, avg_vector, freq_full, best_vec);
         auto t_insert_calc_end = std::chrono::high_resolution_clock::now();
         double dur_insert_calc = std::chrono::duration<double>(t_insert_calc_end - t_insert_calc_start).count();
-        std::cout << "Inserted average and frequency data into the database in " << dur_insert_calc << " seconds." << std::endl;
+        std::cout << "[average vector and fq vector inserted DONE] Inserted average and frequency data into the database in " << dur_insert_calc << " seconds." << std::endl;
 
         // Clear the all_distances vector
         all_distances.clear();
