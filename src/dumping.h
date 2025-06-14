@@ -33,6 +33,6 @@ void dumpEnsemble(my_ensemble& chains, const char* out_folder, const char* job_p
 
 void insertSampleData(const char* conninfo, my_chain& chain, unsigned start, unsigned end, unsigned rep_id, const char* job_prefix, const char* cell_line);
 
-double calculateDistance(const Node node1, const Node node2);
+// double calculateDistance(const Node& node1, const Node& node2);
 
 #endif //SBIF_DUMPING_H

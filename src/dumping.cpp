@@ -1,4 +1,5 @@
 #include "dumping.h"
+#include "check.h"
 #include <libpq-fe.h>
 #include <sstream>
 #include <cstdio>
@@ -31,13 +32,13 @@ char *getOutfile(const char *out_folder, unsigned rep_id, const char *job_prefix
 }
 
 // Euclidean distance calculation function
-double calculateDistance(const Node node1, const Node node2)
-{
-    return std::sqrt(
-        std::pow(node2.x - node1.x, 2) +
-        std::pow(node2.y - node1.y, 2) +
-        std::pow(node2.z - node1.z, 2));
-}
+// double calculateDistance(const Node node1, const Node node2)
+// {
+//     return std::sqrt(
+//         std::pow(node2.x - node1.x, 2) +
+//         std::pow(node2.y - node1.y, 2) +
+//         std::pow(node2.z - node1.z, 2));
+// }
 
 // insert into the database
 std::string join(const std::vector<std::string> &elements, const std::string &delimiter)
@@ -62,7 +63,8 @@ std::vector<float> computeDistanceVector(const my_chain &chain) {
 
     for (int i = 0; i < n_beads; ++i) {
         for (int j = i + 1; j < n_beads; ++j) {
-            double d = calculateDistance(chain[i], chain[j]);
+            // double d = calculateDistance(chain[i], chain[j]);
+            double d = calcuDist(chain[i], chain[j]);
             distances.push_back(static_cast<float>(d));
         }
     }
