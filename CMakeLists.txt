@@ -38,7 +38,7 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 
 # ------------production environment----------------
 if(UNIX)
-    add_definitions(-std=c++11 )
+    add_definitions(-std=c++11)
 else()
     add_definitions(-D_SCL_SECURE_NO_WARNINGS
     -D_CRT_SECURE_NO_WARNINGS -D_WINSOCK_DEPRECATED_NO_WARNINGS)
