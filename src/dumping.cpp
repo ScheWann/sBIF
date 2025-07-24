@@ -230,7 +230,7 @@ std::vector<float> squareformFullMatrix(const std::vector<float> &condensed)
     return full_mat;
 }
 
-std::vector<float> computeBestVector(
+std::pair<std::vector<float>, unsigned> computeBestVector(
     const std::vector<std::pair<unsigned,std::vector<float>>>& all_distances,
     const std::vector<float>& avg_vec)
 {
@@ -267,10 +267,10 @@ std::vector<float> computeBestVector(
             best_idx  = i;
         }
     }
-    return all_distances[best_idx].second;
+    return std::make_pair(all_distances[best_idx].second, all_distances[best_idx].first);
 }
 
-void insertCalcDistance(const char *conninfo, const char *cell_line, const char *chrid, unsigned start, unsigned end, const std::vector<float> &avg_vec, const std::vector<float> &fq_full, const std::vector<float> &best_vec)
+void insertCalcDistance(const char *conninfo, const char *cell_line, const char *chrid, unsigned start, unsigned end, const std::vector<float> &avg_vec, const std::vector<float> &fq_full, const std::vector<float> &best_vec, unsigned best_sample_id)
 {
     PGconn *conn = PQconnectdb(conninfo);
     if (PQstatus(conn) != CONNECTION_OK) {
@@ -279,7 +279,7 @@ void insertCalcDistance(const char *conninfo, const char *cell_line, const char 
         return;
     }
 
-    const int nParams = 7;
+    const int nParams = 8;
     const char *paramValues[nParams];
     int paramLengths[nParams];
     int paramFormats[nParams];
@@ -341,11 +341,17 @@ void insertCalcDistance(const char *conninfo, const char *cell_line, const char 
     paramLengths[6] = static_cast<int>(best_len);
     paramFormats[6] = 1;
 
+    // (8) best_sample_id
+    std::string str_best_sample_id = std::to_string(best_sample_id);
+    paramValues[7]  = str_best_sample_id.c_str();
+    paramLengths[7] = static_cast<int>(str_best_sample_id.size());
+    paramFormats[7] = 0;
+
     PGresult *res = PQexecParams(conn,
         "INSERT INTO calc_distance ("
-            "cell_line, chrid, start_value, end_value, avg_distance_vector, fq_distance_vector, best_vector"
+            "cell_line, chrid, start_value, end_value, avg_distance_vector, fq_distance_vector, best_vector, best_sample_id"
         ") VALUES ("
-            "$1, $2, $3, $4, $5, $6, $7"
+            "$1, $2, $3, $4, $5, $6, $7, $8"
         ");",
         nParams,
         nullptr,

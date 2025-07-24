@@ -336,14 +336,16 @@ int main(int argc, char *argv[])
         std::cout << "[fq vector converted DONE]Converted frequency condensed vector to full matrix in " << dur_full << " seconds." << std::endl;
 
         auto t_best_start = std::chrono::high_resolution_clock::now();
-        std::vector<float> best_vec = computeBestVector(all_distances, avg_vector);
+        auto best_result = computeBestVector(all_distances, avg_vector);
+        std::vector<float> best_vec = best_result.first;
+        unsigned best_sample_id = best_result.second;
         auto t_best_end = std::chrono::high_resolution_clock::now();
         double dur_best = std::chrono::duration<double>(t_best_end - t_best_start).count();
         std::cout << "[best vector computed DONE]Computed best vector in " << dur_best << " seconds." << std::endl;
 
         // Insert average vector and frequency data into the database
         auto t_insert_calc_start = std::chrono::high_resolution_clock::now();
-        insertCalcDistance(conninfo, cell_line_char, job_prefix_char, start, end, avg_vector, freq_full, best_vec);
+        insertCalcDistance(conninfo, cell_line_char, job_prefix_char, start, end, avg_vector, freq_full, best_vec, best_sample_id);
         auto t_insert_calc_end = std::chrono::high_resolution_clock::now();
         double dur_insert_calc = std::chrono::duration<double>(t_insert_calc_end - t_insert_calc_start).count();
         std::cout << "[average vector and fq vector inserted DONE] Inserted average and frequency data into the database in " << dur_insert_calc << " seconds." << std::endl;
