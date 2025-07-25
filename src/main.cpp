@@ -14,7 +14,6 @@
 #include <atomic>
 
 std::atomic<unsigned> global_sample_index(0);
-static std::vector<std::pair<unsigned, std::vector<float>>> all_distances;
 int main(int argc, char *argv[])
 {
 
@@ -260,7 +259,8 @@ int main(int argc, char *argv[])
         const char *out_folder_char = out_folder.c_str();
         const char *job_prefix_char = job_prefix.c_str();
 
-        all_distances.resize(n_samples);
+        std::vector<std::pair<unsigned, std::vector<float>>> all_distances(n_samples);
+
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
 
@@ -290,9 +290,9 @@ int main(int argc, char *argv[])
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
                         insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
-                        // insertDistanceData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
                         local_dist = computeDistanceVector(chains[j]);
                         unsigned idx = global_sample_index.fetch_add(1);
+                        
                         if (idx < n_samples)
                         {
                             all_distances[idx].first = static_cast<unsigned>(i * n_samples_per_run + j);
@@ -301,22 +301,30 @@ int main(int argc, char *argv[])
                     }
             }
         }
+
         auto t_position_end = std::chrono::high_resolution_clock::now();
         double dur_position = std::chrono::duration<double>(t_position_end - t_position_start).count();
         std::cout << "[position data inserted DONE] All samples' position data with " << dur_position << " seconds." << std::endl;
 
+        // Open a single connection that will be re-used for all distance inserts
+        PGconn *conn = PQconnectdb(conninfo);
+        if (PQstatus(conn) != CONNECTION_OK) {
+            std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
+            return 1;
+        }
         auto t_insert_start = std::chrono::high_resolution_clock::now();
         // insert all distances into the database
         for (unsigned idx = 0; idx < n_samples; ++idx) 
         {
             unsigned rep_id = all_distances[idx].first;
             const std::vector<float> &dist_vec = all_distances[idx].second;
-            insertDistanceDataFromVector(conninfo, cell_line_char, job_prefix_char, rep_id, start, end, dist_vec);
+            insertDistanceDataFromVector(conn, cell_line_char, job_prefix_char, rep_id, start, end, dist_vec);
         }
         auto t_insert_end = std::chrono::high_resolution_clock::now();
         double dur_insert = std::chrono::duration<double>(t_insert_end - t_insert_start).count();
         std::cout << "[distance data inserted DONE] Inserted all distances into the database in " << dur_insert << " seconds." << std::endl;
-
+        PQfinish(conn);
+        
         auto t_avg_start = std::chrono::high_resolution_clock::now();
         std::vector<float> avg_vector = computeAvgVector(all_distances);
         auto t_avg_end = std::chrono::high_resolution_clock::now();

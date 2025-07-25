@@ -15,6 +15,10 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 #     set(CMAKE_C_COMPILER "/opt/homebrew/opt/llvm/bin/clang")
 #     set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/llvm/bin/clang++")
 #     add_definitions(-std=c++11)
+
+#     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
+#     set(CMAKE_C_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
+
 #     if(CMAKE_C_COMPILER_ID MATCHES "Clang")
 #         set(OpenMP_C "${CMAKE_C_COMPILER}")
 #         set(OpenMP_C_FLAGS "-fopenmp=libomp -Wno-unused-command-line-argument")
@@ -38,7 +42,7 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 
 # ------------production environment----------------
 if(UNIX)
-    add_definitions(-std=c++11)
+    add_definitions(-std=c++11 -O3 -march=native -funroll-loops)
 else()
     add_definitions(-D_SCL_SECURE_NO_WARNINGS
     -D_CRT_SECURE_NO_WARNINGS -D_WINSOCK_DEPRECATED_NO_WARNINGS)

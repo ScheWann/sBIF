@@ -71,9 +71,9 @@ std::vector<float> computeDistanceVector(const my_chain &chain) {
     return distances;
 }
 
-void insertDistanceDataFromVector(const char *conninfo, const char *cell_line, const char *chrid, unsigned rep_id, unsigned start, unsigned end, const std::vector<float> &distances_f)
+void insertDistanceDataFromVector(PGconn *conn, const char *cell_line, const char *chrid, unsigned rep_id, unsigned start, unsigned end, const std::vector<float> &distances_f)
 {
-    PGconn *conn = PQconnectdb(conninfo);
+    // Ensure the passed-in connection is valid
     if (PQstatus(conn) != CONNECTION_OK) {
         std::cerr << "connected databse failed " << PQerrorMessage(conn) << std::endl;
         PQfinish(conn);
@@ -164,7 +164,6 @@ void insertDistanceDataFromVector(const char *conninfo, const char *cell_line, c
         std::cerr << "insert distance failed: " << PQerrorMessage(conn) << std::endl;
     }
     PQclear(res);
-    PQfinish(conn);
 }
 
 // Compute the average distance vector from all distances collected

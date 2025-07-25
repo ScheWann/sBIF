@@ -17,7 +17,7 @@ char* getOutfile(const char* out_folder, unsigned rep_id, const char* job_prefix
 
 std::vector<float> computeDistanceVector(const my_chain &chain);
 
-void insertDistanceDataFromVector(const char *conninfo, const char *cell_line, const char *chrid, unsigned rep_id, unsigned start, unsigned end, const std::vector<float> &distances_f);
+void insertDistanceDataFromVector(PGconn *conn, const char *cell_line, const char *chrid, unsigned rep_id, unsigned start, unsigned end, const std::vector<float> &distances_f);
 
 std::vector<float> computeAvgVector(const std::vector<std::pair<unsigned, std::vector<float>>> &all_distances);
 
