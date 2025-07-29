@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <numeric>
 #include <cmath>
+#include <algorithm>
 
 char *getOutfile(const char *out_folder, unsigned rep_id, const char *job_prefix)
 {
@@ -229,33 +230,75 @@ std::vector<float> squareformFullMatrix(const std::vector<float> &condensed)
     return full_mat;
 }
 
+// Helper function to calculate ranks for Spearman correlation
+std::vector<double> calculateRanks(const std::vector<float>& values) {
+    size_t n = values.size();
+    std::vector<std::pair<float, size_t>> indexed_values;
+    indexed_values.reserve(n);
+    
+    for (size_t i = 0; i < n; ++i) {
+        indexed_values.emplace_back(values[i], i);
+    }
+    
+    // Sort by value
+    std::sort(indexed_values.begin(), indexed_values.end());
+    
+    std::vector<double> ranks(n);
+    for (size_t i = 0; i < n; ++i) {
+        size_t start = i;
+        float current_value = indexed_values[i].first;
+        
+        // Find all elements with the same value (handle ties)
+        while (i + 1 < n && indexed_values[i + 1].first == current_value) {
+            ++i;
+        }
+        
+        // Calculate average rank for tied values
+        double avg_rank = (start + i + 2.0) / 2.0; // +2 because ranks are 1-based and end is inclusive
+        
+        // Assign average rank to all tied elements
+        for (size_t j = start; j <= i; ++j) {
+            ranks[indexed_values[j].second] = avg_rank;
+        }
+    }
+    
+    return ranks;
+}
+
 std::pair<std::vector<float>, unsigned> computeBestVector(
     const std::vector<std::pair<unsigned,std::vector<float>>>& all_distances,
     const std::vector<float>& avg_vec)
 {
     size_t n = all_distances.size(), L = avg_vec.size();
-    // center the average vector
-    double avg_mean = std::accumulate(avg_vec.begin(), avg_vec.end(), 0.0) / L;
-    std::vector<double> avg_centered(L);
+    
+    // Calculate ranks for the average vector
+    std::vector<double> avg_ranks = calculateRanks(avg_vec);
+    
+    // Center the ranked average vector
+    double avg_rank_mean = std::accumulate(avg_ranks.begin(), avg_ranks.end(), 0.0) / L;
+    std::vector<double> avg_ranks_centered(L);
     for (size_t i = 0; i < L; ++i)
-        avg_centered[i] = avg_vec[i] - avg_mean;
+        avg_ranks_centered[i] = avg_ranks[i] - avg_rank_mean;
     double avg_norm_sq = std::accumulate(
-        avg_centered.begin(), avg_centered.end(), 0.0,
+        avg_ranks_centered.begin(), avg_ranks_centered.end(), 0.0,
         [](double s, double v){ return s + v*v; });
     double avg_norm = std::sqrt(avg_norm_sq);
 
-    // calculate the best correlation
+    // Calculate the best Spearman correlation
     size_t best_idx = 0;
     double best_corr = 0.0;
     for (size_t i = 0; i < n; ++i) {
         auto &vec = all_distances[i].second;
-        double mean_i = std::accumulate(vec.begin(), vec.end(), 0.0) / L;
+        
+        // Calculate ranks for current vector
+        std::vector<double> vec_ranks = calculateRanks(vec);
+        double rank_mean_i = std::accumulate(vec_ranks.begin(), vec_ranks.end(), 0.0) / L;
 
         double numer = 0, norm_i_sq = 0;
         for (size_t j = 0; j < L; ++j) {
-            double x_cent = vec[j] - mean_i;
-            numer    += x_cent * avg_centered[j];
-            norm_i_sq += x_cent * x_cent;
+            double rank_cent = vec_ranks[j] - rank_mean_i;
+            numer    += rank_cent * avg_ranks_centered[j];
+            norm_i_sq += rank_cent * rank_cent;
         }
         double norm_i = std::sqrt(norm_i_sq);
         double corr = (norm_i * avg_norm == 0.0)
