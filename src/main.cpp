@@ -260,7 +260,14 @@ int main(int argc, char *argv[])
         const char *out_folder_char = out_folder.c_str();
         const char *job_prefix_char = job_prefix.c_str();
 
-        std::vector<std::pair<unsigned, std::vector<float>>> all_distances(n_samples);
+        // Instead of storing all distances, use online statistics
+        unsigned expected_dist_size = 0;
+        std::vector<double> sum_distances;
+        std::vector<unsigned> count_condensed;
+        std::vector<float> best_distances;
+        unsigned best_sample_id = 0;
+        double best_corr = 0.0;  // Use correlation instead of score
+        std::mutex stats_mutex;
 
         vectord2d inter = readInterFiveCols(inter_file_char, weights, chrom_char, chrmfile_char, start, end, resolution);
         getInterNum(inter, n_samples_per_run, false, 1);
@@ -303,15 +310,70 @@ int main(int argc, char *argv[])
                 my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
-                        insertSampleData(thread_conn, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
-                        local_dist = computeDistanceVector(chains[j]);
-                        unsigned idx = global_sample_index.fetch_add(1);
+                        unsigned sample_id = i * n_samples_per_run + j;
+                        insertSampleData(thread_conn, chains[j], start, end, sample_id, local_job_prefix, local_cell_line);
                         
-                        if (idx < n_samples)
+                        // Compute distance vector
+                        std::vector<float> local_dist = computeDistanceVector(chains[j]);
+                        
+                        // Insert distance data immediately to avoid memory buildup
+                        insertDistanceDataFromVector(thread_conn, local_cell_line, local_job_prefix, sample_id, start, end, local_dist);
+                        
+                        // Update statistics online (thread-safe)
                         {
-                            all_distances[idx].first = static_cast<unsigned>(i * n_samples_per_run + j);
-                            all_distances[idx].second = std::move(local_dist);
+                            std::lock_guard<std::mutex> lock(stats_mutex);
+                            if (sum_distances.empty()) {
+                                expected_dist_size = local_dist.size();
+                                sum_distances.resize(expected_dist_size, 0.0);
+                                count_condensed.resize(expected_dist_size, 0);
+                            }
+                            
+                            // Update running sum for average
+                            for (size_t k = 0; k < local_dist.size(); ++k) {
+                                sum_distances[k] += local_dist[k];
+                                if (local_dist[k] <= 80.0f) {
+                                    count_condensed[k]++;
+                                }
+                            }
+                            
+                            // Check if this is the best sample using Pearson correlation with current average
+                            if (global_sample_index.load() > 10) { // Only start checking after some samples
+                                unsigned current_count = global_sample_index.load();
+                                
+                                // Calculate current average vector
+                                std::vector<double> current_avg(local_dist.size());
+                                for (size_t k = 0; k < local_dist.size(); ++k) {
+                                    current_avg[k] = sum_distances[k] / current_count;
+                                }
+                                
+                                // Calculate means for centering
+                                double avg_mean = std::accumulate(current_avg.begin(), current_avg.end(), 0.0) / current_avg.size();
+                                double local_mean = std::accumulate(local_dist.begin(), local_dist.end(), 0.0) / local_dist.size();
+                                
+                                // Calculate Pearson correlation coefficient
+                                double numer = 0.0, norm_avg_sq = 0.0, norm_local_sq = 0.0;
+                                for (size_t k = 0; k < local_dist.size(); ++k) {
+                                    double avg_centered = current_avg[k] - avg_mean;
+                                    double local_centered = local_dist[k] - local_mean;
+                                    numer += avg_centered * local_centered;
+                                    norm_avg_sq += avg_centered * avg_centered;
+                                    norm_local_sq += local_centered * local_centered;
+                                }
+                                
+                                double norm_avg = std::sqrt(norm_avg_sq);
+                                double norm_local = std::sqrt(norm_local_sq);
+                                double corr = (norm_avg * norm_local == 0.0) ? 0.0 : numer / (norm_avg * norm_local);
+                                
+                                // Keep the sample with highest absolute correlation
+                                if (std::abs(corr) > std::abs(best_corr)) {
+                                    best_corr = corr;
+                                    best_distances = local_dist;
+                                    best_sample_id = sample_id;
+                                }
+                            }
                         }
+                        
+                        global_sample_index.fetch_add(1);
                     }
             }
             
@@ -323,63 +385,45 @@ int main(int argc, char *argv[])
 
         auto t_position_end = std::chrono::high_resolution_clock::now();
         double dur_position = std::chrono::duration<double>(t_position_end - t_position_start).count();
-        std::cout << "[position data inserted DONE] All samples' position data with " << dur_position << " seconds." << std::endl;
+        std::cout << "[position and distance data inserted DONE] All samples' data inserted in " << dur_position << " seconds." << std::endl;
 
-        // Open a single connection that will be re-used for all distance inserts
-        PGconn *conn = PQconnectdb(conninfo);
-        if (PQstatus(conn) != CONNECTION_OK) {
-            std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
-            return 1;
-        }
-        auto t_insert_start = std::chrono::high_resolution_clock::now();
-        // insert all distances into the database
-        for (unsigned idx = 0; idx < n_samples; ++idx) 
-        {
-            unsigned rep_id = all_distances[idx].first;
-            const std::vector<float> &dist_vec = all_distances[idx].second;
-            insertDistanceDataFromVector(conn, cell_line_char, job_prefix_char, rep_id, start, end, dist_vec);
-        }
-        auto t_insert_end = std::chrono::high_resolution_clock::now();
-        double dur_insert = std::chrono::duration<double>(t_insert_end - t_insert_start).count();
-        std::cout << "[distance data inserted DONE] Inserted all distances into the database in " << dur_insert << " seconds." << std::endl;
-        PQfinish(conn);
+        // Compute final statistics from accumulated data
+        auto t_calc_start = std::chrono::high_resolution_clock::now();
         
-        auto t_avg_start = std::chrono::high_resolution_clock::now();
-        std::vector<float> avg_vector = computeAvgVector(all_distances);
-        auto t_avg_end = std::chrono::high_resolution_clock::now();
-        double dur_avg = std::chrono::duration<double>(t_avg_end - t_avg_start).count();
-        std::cout << "[average vector computed DONE] Computed average vector in " << dur_avg << " seconds." << std::endl;
-
-        auto t_freqc_start = std::chrono::high_resolution_clock::now();
-        std::vector<float> freq_condensed = computeFreqCondensed(all_distances, 80.0f);
-        auto t_freqc_end = std::chrono::high_resolution_clock::now();
-        double dur_freqc = std::chrono::duration<double>(t_freqc_end - t_freqc_start).count();
-        std::cout << "[fq vector computed DONE]Computed frequency condensed vector in " << dur_freqc << " seconds." << std::endl;
-
-        auto t_full_start = std::chrono::high_resolution_clock::now();
+        // Calculate average vector
+        std::vector<float> avg_vector(expected_dist_size);
+        for (size_t i = 0; i < expected_dist_size; ++i) {
+            avg_vector[i] = static_cast<float>(sum_distances[i] / n_samples);
+        }
+        
+        // Calculate frequency condensed vector
+        std::vector<float> freq_condensed(expected_dist_size);
+        for (size_t i = 0; i < expected_dist_size; ++i) {
+            freq_condensed[i] = static_cast<float>(count_condensed[i]) / n_samples;
+        }
+        
+        // Convert to full matrix
         std::vector<float> freq_full = squareformFullMatrix(freq_condensed);
-        auto t_full_end = std::chrono::high_resolution_clock::now();
-        double dur_full = std::chrono::duration<double>(t_full_end - t_full_start).count();
-        std::cout << "[fq vector converted DONE]Converted frequency condensed vector to full matrix in " << dur_full << " seconds." << std::endl;
-
-        auto t_best_start = std::chrono::high_resolution_clock::now();
-        auto best_result = computeBestVector(all_distances, avg_vector);
-        std::vector<float> best_vec = best_result.first;
-        unsigned best_sample_id = best_result.second;
-        auto t_best_end = std::chrono::high_resolution_clock::now();
-        double dur_best = std::chrono::duration<double>(t_best_end - t_best_start).count();
-        std::cout << "[best vector computed DONE]Computed best vector in " << dur_best << " seconds." << std::endl;
+        
+        auto t_calc_end = std::chrono::high_resolution_clock::now();
+        double dur_calc = std::chrono::duration<double>(t_calc_end - t_calc_start).count();
+        std::cout << "[statistics computed DONE] Computed all statistics in " << dur_calc << " seconds." << std::endl;
 
         // Insert average vector and frequency data into the database
         auto t_insert_calc_start = std::chrono::high_resolution_clock::now();
-        insertCalcDistance(conninfo, cell_line_char, job_prefix_char, start, end, avg_vector, freq_full, best_vec, best_sample_id);
+        insertCalcDistance(conninfo, cell_line_char, job_prefix_char, start, end, avg_vector, freq_full, best_distances, best_sample_id);
         auto t_insert_calc_end = std::chrono::high_resolution_clock::now();
         double dur_insert_calc = std::chrono::duration<double>(t_insert_calc_end - t_insert_calc_start).count();
-        std::cout << "[average vector and fq vector inserted DONE] Inserted average and frequency data into the database in " << dur_insert_calc << " seconds." << std::endl;
+        std::cout << "[calculated data inserted DONE] Inserted calculated data into the database in " << dur_insert_calc << " seconds." << std::endl;
 
-        // Clear the all_distances vector
-        all_distances.clear();
-        std::vector<std::pair<unsigned, std::vector<float>>>().swap(all_distances);
+        // Memory cleanup is no longer needed as we don't store all distances
+        // Clear statistics vectors if needed
+        sum_distances.clear();
+        count_condensed.clear();
+        avg_vector.clear();
+        freq_condensed.clear();
+        freq_full.clear();
+        best_distances.clear();
 
         finish = clock();
         totaltime = (double)(finish - begin) / CLOCKS_PER_SEC;
