@@ -368,14 +368,12 @@ void insertCalcDistance(const char *conninfo, const char *cell_line, const char 
     PQfinish(conn);
 }
 
-void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
+void insertSampleData(PGconn *conn, my_chain &chain, unsigned start, unsigned end, unsigned rep_id, const char *job_prefix, const char *cell_line)
 {
-    // Establish a new connection for this thread
-    PGconn *conn = PQconnectdb(conninfo);
+    // Check if the connection is valid
     if (PQstatus(conn) != CONNECTION_OK)
     {
-        std::cerr << "Connection to database failed: " << PQerrorMessage(conn) << std::endl;
-        PQfinish(conn);
+        std::cerr << "Invalid database connection: " << PQerrorMessage(conn) << std::endl;
         return;
     }
 
@@ -429,8 +427,7 @@ void insertSampleData(const char *conninfo, my_chain &chain, unsigned start, uns
     }
     PQclear(res);
 
-    // Close the connection for this thread
-    PQfinish(conn);
+    // Note: Connection is managed by the caller, so we don't close it here
 }
 
 void dumpEnsemble(my_ensemble &chains, const char *out_folder, const char *job_prefix)

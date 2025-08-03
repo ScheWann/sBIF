@@ -12,6 +12,7 @@
 #include <sstream>
 #include <thread>
 #include <atomic>
+#include <libpq-fe.h>
 
 std::atomic<unsigned> global_sample_index(0);
 int main(int argc, char *argv[])
@@ -277,6 +278,14 @@ int main(int argc, char *argv[])
         auto t_position_start = std::chrono::high_resolution_clock::now();
         #pragma omp parallel num_threads(threads)
         {
+            // Create a thread-local database connection
+            PGconn *thread_conn = PQconnectdb(conninfo);
+            if (PQstatus(thread_conn) != CONNECTION_OK) {
+                std::cerr << "Thread connection to database failed: " << PQerrorMessage(thread_conn) << std::endl;
+                PQfinish(thread_conn);
+                thread_conn = nullptr;
+            }
+            
             std::vector<float> local_dist;
             char local_job_prefix[64];
             char local_cell_line[64];
@@ -286,10 +295,15 @@ int main(int argc, char *argv[])
             #pragma omp for schedule(static, 1)
             for (int i = 0; i < n_runs; ++i)
             {
+                if (thread_conn == nullptr) {
+                    std::cerr << "Skipping run " << i << " due to database connection failure" << std::endl;
+                    continue;
+                }
+                
                 my_ensemble chains = SBIF(inter, weights, n_samples_per_run, n_sphere, diam, diam, ki_dist, max_trials, n_iter);
                     for (unsigned j = 0; j != n_samples_per_run; j++)
                     {
-                        insertSampleData(conninfo, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
+                        insertSampleData(thread_conn, chains[j], start, end, i * n_samples_per_run + j, local_job_prefix, local_cell_line);
                         local_dist = computeDistanceVector(chains[j]);
                         unsigned idx = global_sample_index.fetch_add(1);
                         
@@ -299,6 +313,11 @@ int main(int argc, char *argv[])
                             all_distances[idx].second = std::move(local_dist);
                         }
                     }
+            }
+            
+            // Clean up thread-local database connection
+            if (thread_conn != nullptr) {
+                PQfinish(thread_conn);
             }
         }
 
